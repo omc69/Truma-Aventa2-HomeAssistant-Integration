@@ -1,0 +1,422 @@
+"""Connection manager for a Truma appliance over BLE.
+
+Owns one link: connect, register, subscribe to the topics we care about, then
+stay connected and translate inbound topic updates into state. Unlike a
+battery BMS this appliance serves several clients at once and pushes changes
+on its own, so there is nothing to poll -- the connection is held open and
+updates arrive as they happen.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import logging
+from collections.abc import Callable
+from typing import Any
+
+from bleak import BleakError
+from bleak.backends.characteristic import BleakGATTCharacteristic
+from bleak.backends.device import BLEDevice
+from bleak_retry_connector import BleakClientWithServiceCache, establish_connection
+
+from .const import (
+    ACK_DATA,
+    ADDR_MESSAGE_BROKER,
+    ADDR_PANEL,
+    ADDR_UNREGISTERED,
+    CMD_CHAR_UUID,
+    CONFIRM_MSG_ACK,
+    CONTROL_REGISTRATION,
+    DATA_READ_CHAR_UUID,
+    DATA_WRITE_CHAR_UUID,
+    MAX_TOPICS_PER_SUBSCRIBE,
+    MBP_INFO,
+    MBP_PARAM_DISCOVERY_RESPONSE,
+    MBP_SUBSCRIBE,
+    MBP_WRITE,
+    OP_INIT_DATA_TRANSFER,
+    OP_MSG_ACK,
+    OP_READY_STATUS,
+    PROTOCOL_VERSION,
+    SUBSCRIBED_TOPICS,
+    TOPIC_AIR_CIRCULATION,
+    TOPIC_AIR_COOLING,
+    TOPIC_AIR_HEATING,
+    TOPIC_AMBIENT_LIGHT,
+    TOPIC_IDENTIFY,
+    TOPIC_ROOM_CLIMATE,
+)
+from .frames import Frame, FrameStream, build, build_mbp
+from .models import TrumaState
+
+_LOGGER = logging.getLogger(__name__)
+
+#: How long to wait for each step of the transport handshake.
+_READY_TIMEOUT = 5.0
+#: How long to wait for the appliance to accept our registration.
+_REGISTER_TIMEOUT = 10.0
+#: Reconnect backoff bounds, seconds.
+_BACKOFF_START = 5.0
+_BACKOFF_MAX = 120.0
+#: Conservative default until the negotiated MTU is known.
+_DEFAULT_CHUNK = 180
+
+#: Which parameter of which topic maps to which state field.
+_FIELD_MAP: dict[tuple[str, str], str] = {
+    (TOPIC_ROOM_CLIMATE, "Mode"): "mode",
+    (TOPIC_ROOM_CLIMATE, "TgtTemp"): "target_temperature",
+    (TOPIC_AIR_COOLING, "Mode"): "cooling_fan_mode",
+    (TOPIC_AIR_COOLING, "Temp"): "current_temperature",
+    (TOPIC_AIR_HEATING, "Mode"): "heating_fan_mode",
+    (TOPIC_AIR_CIRCULATION, "FanLevel"): "fan_level",
+    (TOPIC_AMBIENT_LIGHT, "Active"): "light_on",
+    (TOPIC_AMBIENT_LIGHT, "LightStep"): "light_step",
+    (TOPIC_IDENTIFY, "Name"): "name",
+    (TOPIC_IDENTIFY, "SerialNr"): "serial_number",
+}
+
+#: Topics the appliance owns rather than the panel. Commands for these go to
+#: the appliance's own address, which is learned at runtime; commands for
+#: RoomClimate go to the panel. Sending to the wrong one is ignored silently.
+_APPLIANCE_TOPICS = frozenset(
+    {TOPIC_AIR_COOLING, TOPIC_AIR_HEATING, TOPIC_AIR_CIRCULATION, TOPIC_AMBIENT_LIGHT}
+)
+
+
+class TrumaBleDevice:
+    """Maintains a live connection to one Truma appliance."""
+
+    def __init__(self, ble_device: BLEDevice, *, name: str | None = None) -> None:
+        """Initialise the manager."""
+        self._ble_device = ble_device
+        self._name = name or ble_device.name or ble_device.address
+        self._listeners: list[Callable[[TrumaState], None]] = []
+
+        self._client: BleakClientWithServiceCache | None = None
+        self._stream = FrameStream()
+        self._task: asyncio.Task[None] | None = None
+        self._stopping = False
+        self._wake = asyncio.Event()
+
+        self._ready = asyncio.Event()
+        self._registered = asyncio.Event()
+        self._send_lock = asyncio.Lock()
+
+        #: Address the appliance assigns us during registration.
+        self._address: int = ADDR_UNREGISTERED
+        #: Address of the appliance itself, learned from its own messages.
+        self._appliance: int | None = None
+        self._chunk = _DEFAULT_CHUNK
+
+        self.state = TrumaState()
+
+    # -- public API ---------------------------------------------------------
+
+    @property
+    def address(self) -> str:
+        """Bluetooth address."""
+        return self._ble_device.address
+
+    @property
+    def name(self) -> str:
+        """Advertised name."""
+        return self._name
+
+    @property
+    def connected(self) -> bool:
+        """Whether a registered, usable link exists."""
+        return (
+            self._client is not None
+            and self._client.is_connected
+            and self._registered.is_set()
+        )
+
+    def add_listener(
+        self, listener: Callable[[TrumaState], None]
+    ) -> Callable[[], None]:
+        """Register a state callback. Returns a callable that removes it."""
+        self._listeners.append(listener)
+
+        def _remove() -> None:
+            if listener in self._listeners:
+                self._listeners.remove(listener)
+
+        return _remove
+
+    def set_ble_device(self, ble_device: BLEDevice) -> None:
+        """Adopt a fresher BLEDevice."""
+        self._ble_device = ble_device
+
+    async def async_start(self) -> None:
+        """Start connecting and stay connected."""
+        if self._task is not None:
+            return
+        self._stopping = False
+        self._task = asyncio.create_task(self._run(), name=f"truma-{self.address}")
+
+    async def async_stop(self) -> None:
+        """Disconnect and stop reconnecting."""
+        self._stopping = True
+        self._wake.set()
+        if self._task is not None:
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+            self._task = None
+        await self._async_disconnect()
+
+    async def async_set_parameter(self, topic: str, parameter: str, value: Any) -> None:
+        """Write one parameter, routed to whichever device owns the topic."""
+        if not self.connected:
+            raise BleakError(f"{self._name}: not connected")
+        dest = self._destination_for(topic)
+        _LOGGER.debug("%s: -> %s.%s = %r (dest 0x%04X)", self._name, topic, parameter, value, dest)
+        await self._async_send(
+            build_mbp(
+                dest=dest,
+                src=self._address,
+                mbp_type=MBP_WRITE,
+                body={"tn": topic, "pn": parameter, "v": value},
+            )
+        )
+
+    # -- connection ---------------------------------------------------------
+
+    async def _run(self) -> None:
+        backoff = _BACKOFF_START
+        while not self._stopping:
+            try:
+                await self._async_connect_and_hold()
+            except asyncio.CancelledError:
+                raise
+            except (BleakError, TimeoutError, OSError) as err:
+                _LOGGER.debug("%s: connection lost: %s", self._name, err)
+            except Exception:  # noqa: BLE001 - the loop must never die
+                _LOGGER.exception("%s: unexpected error", self._name)
+            else:
+                backoff = _BACKOFF_START
+
+            await self._async_disconnect()
+            self._notify()
+            if self._stopping:
+                break
+            self._wake.clear()
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(self._wake.wait(), timeout=backoff)
+            backoff = min(backoff * 2, _BACKOFF_MAX)
+
+    async def _async_connect_and_hold(self) -> None:
+        self._stream.reset()
+        self._registered.clear()
+        self._address = ADDR_UNREGISTERED
+        self._appliance = None
+
+        _LOGGER.debug("%s: connecting to %s", self._name, self.address)
+        client = await establish_connection(
+            BleakClientWithServiceCache,
+            self._ble_device,
+            self._name,
+            disconnected_callback=self._on_disconnected,
+            ble_device_callback=lambda: self._ble_device,
+            use_services_cache=True,
+        )
+        self._client = client
+        if mtu := getattr(client, "mtu_size", 0):
+            self._chunk = max(20, mtu - 3)
+
+        # Never subscribe to the alternate command characteristic: doing so
+        # breaks the transport.
+        await client.start_notify(CMD_CHAR_UUID, self._on_command)
+        await client.start_notify(DATA_READ_CHAR_UUID, self._on_data)
+
+        await self._async_register()
+        await self._async_subscribe()
+        _LOGGER.debug("%s: registered as 0x%04X", self._name, self._address)
+
+        # Stay connected. The appliance pushes updates by itself; the constant
+        # acknowledgement traffic keeps the link alive, so no keepalive of our
+        # own is needed.
+        while not self._stopping and client.is_connected:
+            await asyncio.sleep(1.0)
+
+    async def _async_disconnect(self) -> None:
+        client, self._client = self._client, None
+        self._registered.clear()
+        if client is None:
+            return
+        with contextlib.suppress(BleakError, TimeoutError, OSError):
+            await client.disconnect()
+
+    # -- protocol -----------------------------------------------------------
+
+    async def _async_register(self) -> None:
+        """Announce ourselves and learn the address we are given."""
+        await self._async_send(
+            build(
+                dest=ADDR_MESSAGE_BROKER,
+                src=ADDR_UNREGISTERED,
+                control=CONTROL_REGISTRATION,
+                payload=bytes([0x01, 0x00]) + _cbor({"pv": PROTOCOL_VERSION}),
+            )
+        )
+        try:
+            await asyncio.wait_for(self._registered.wait(), timeout=_REGISTER_TIMEOUT)
+        except TimeoutError as err:
+            raise BleakError(f"{self._name}: registration was not answered") from err
+
+    async def _async_subscribe(self) -> None:
+        """Subscribe to the topics we follow, in the batches the app uses."""
+        topics = list(SUBSCRIBED_TOPICS)
+        for start in range(0, len(topics), MAX_TOPICS_PER_SUBSCRIBE):
+            batch = topics[start : start + MAX_TOPICS_PER_SUBSCRIBE]
+            await self._async_send(
+                build_mbp(
+                    dest=ADDR_MESSAGE_BROKER,
+                    src=self._address,
+                    mbp_type=MBP_SUBSCRIBE,
+                    body={"tn": batch},
+                )
+            )
+            await asyncio.sleep(0.25)
+
+    def _destination_for(self, topic: str) -> int:
+        """Which device owns a topic."""
+        if topic in _APPLIANCE_TOPICS and self._appliance is not None:
+            return self._appliance
+        return ADDR_PANEL
+
+    async def _async_send(self, frame: bytes) -> None:
+        """Send one frame through the transport handshake.
+
+        The appliance will not accept data until it has said it is ready, and
+        the exchange is not re-entrant, so sends are serialised.
+        """
+        client = self._client
+        if client is None:
+            raise BleakError(f"{self._name}: not connected")
+
+        async with self._send_lock:
+            self._ready.clear()
+            await client.write_gatt_char(
+                CMD_CHAR_UUID,
+                bytes([OP_INIT_DATA_TRANSFER]) + len(frame).to_bytes(2, "little"),
+                response=False,
+            )
+            try:
+                await asyncio.wait_for(self._ready.wait(), timeout=_READY_TIMEOUT)
+            except TimeoutError as err:
+                raise BleakError(f"{self._name}: appliance never signalled ready") from err
+
+            for offset in range(0, len(frame), self._chunk):
+                await client.write_gatt_char(
+                    DATA_WRITE_CHAR_UUID,
+                    frame[offset : offset + self._chunk],
+                    response=False,
+                )
+
+    # -- callbacks ----------------------------------------------------------
+
+    def _on_disconnected(self, _client: BleakClientWithServiceCache) -> None:
+        _LOGGER.debug("%s: disconnected", self._name)
+        self._registered.clear()
+        self._wake.set()
+
+    def _on_command(self, _sender: BleakGATTCharacteristic, data: bytearray) -> None:
+        """Drive the transport state machine."""
+        raw = bytes(data)
+        _LOGGER.debug("%s: <- CMD %s", self._name, raw.hex(" "))
+        if not raw:
+            return
+        if raw[0] == OP_READY_STATUS:
+            self._ready.set()
+        elif raw[0] == OP_MSG_ACK:
+            # Arrives asynchronously; confirm it without blocking anything.
+            self._schedule_command(CONFIRM_MSG_ACK)
+
+    def _on_data(self, _sender: BleakGATTCharacteristic, data: bytearray) -> None:
+        """Consume inbound messages."""
+        raw = bytes(data)
+        frames = self._stream.feed(raw)
+        if raw:
+            # Every inbound data frame is acknowledged; the resulting steady
+            # traffic is also what keeps the connection alive.
+            self._schedule_command(ACK_DATA)
+        changed: dict[str, Any] = {}
+        for frame in frames:
+            changed.update(self._handle_frame(frame))
+        if changed:
+            self.state = self.state.with_values(changed)
+            self._notify()
+
+    def _schedule_command(self, payload: bytes) -> None:
+        """Write to the command channel from a notification callback."""
+        client = self._client
+        if client is None:
+            return
+
+        async def _write() -> None:
+            with contextlib.suppress(BleakError, TimeoutError, OSError):
+                await client.write_gatt_char(CMD_CHAR_UUID, payload, response=False)
+
+        asyncio.get_running_loop().create_task(_write())  # noqa: RUF006
+
+    def _handle_frame(self, frame: Frame) -> dict[str, Any]:
+        """Turn one inbound frame into state changes."""
+        if frame.control == CONTROL_REGISTRATION:
+            body = frame.body
+            if isinstance(body, dict) and "addr" in body:
+                self._address = int(body["addr"])
+                self._registered.set()
+            return {}
+
+        if frame.mbp_type not in (MBP_INFO, MBP_PARAM_DISCOVERY_RESPONSE):
+            return {}
+
+        body = frame.body
+        if not isinstance(body, dict):
+            return {}
+
+        changed: dict[str, Any] = {}
+        raw = dict(self.state.raw)
+        for topic, parameter, value in _walk_parameters(body):
+            raw[f"{topic}.{parameter}"] = value
+            if topic in _APPLIANCE_TOPICS and frame.src not in (0, ADDR_PANEL):
+                # The appliance identifies itself by owning these topics; its
+                # address is not fixed and is not the one the reference lists.
+                self._appliance = frame.src
+            if (field := _FIELD_MAP.get((topic, parameter))) is not None:
+                changed[field] = value
+        if raw != self.state.raw:
+            changed["raw"] = raw
+        return changed
+
+    def _notify(self) -> None:
+        for listener in list(self._listeners):
+            listener(self.state)
+
+
+def _cbor(value: Any) -> bytes:
+    import cbor2
+
+    return cbor2.dumps(value)
+
+
+def _walk_parameters(body: dict[str, Any]):
+    """Yield (topic, parameter, value) from either message shape.
+
+    An INFO message carries a single triplet; a parameter-discovery response
+    nests them under topics, each with a list of parameters.
+    """
+    if isinstance(body.get("tn"), str) and "pn" in body:
+        yield body["tn"], body["pn"], body.get("v")
+        return
+    for topic in body.get("topics", []) or []:
+        if not isinstance(topic, dict):
+            continue
+        for parameter in topic.get("parameters", []) or []:
+            if not isinstance(parameter, dict):
+                continue
+            name = parameter.get("tn") or topic.get("tn")
+            if isinstance(name, str) and "pn" in parameter:
+                yield name, parameter["pn"], parameter.get("v")

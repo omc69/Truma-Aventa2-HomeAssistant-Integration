@@ -1,0 +1,27 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "description": "Wähle das hinzuzufügende Truma-Gerät. Es muss bereits mit diesem Home-Assistant-Host gekoppelt sein — siehe Dokumentation.",
+        "data": {
+          "address": "Gerät"
+        }
+      },
+      "confirm": {
+        "description": "Möchtest du {name} einrichten?\n\nDas Gerät akzeptiert nur einen Host, mit dem es gekoppelt wurde. Falls die Kopplung noch fehlt, hole sie zuerst nach — die Dokumentation beschreibt, wie."
+      }
+    },
+    "abort": {
+      "already_configured": "Dieses Gerät ist bereits eingerichtet",
+      "no_devices_found": "Kein Truma-Gerät in Reichweite gefunden. Prüfe, ob es eingeschaltet und in Reichweite eines verbindungsfähigen Bluetooth-Adapters ist."
+    }
+  },
+  "entity": {
+    "light": {
+      "ambient_light": {
+        "name": "Ambientelicht"
+      }
+    }
+  }
+}

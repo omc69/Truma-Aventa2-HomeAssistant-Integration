@@ -1,0 +1,27 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "description": "Choose the Truma appliance to add. It must already be paired with this Home Assistant host — see the documentation.",
+        "data": {
+          "address": "Appliance"
+        }
+      },
+      "confirm": {
+        "description": "Do you want to set up {name}?\n\nThe appliance only accepts a host it has been paired with. If it has not been paired yet, do that first — the documentation describes how."
+      }
+    },
+    "abort": {
+      "already_configured": "This appliance is already configured",
+      "no_devices_found": "No Truma appliance found in range. Make sure it is powered and within reach of a connectable Bluetooth adapter."
+    }
+  },
+  "entity": {
+    "light": {
+      "ambient_light": {
+        "name": "Ambient light"
+      }
+    }
+  }
+}

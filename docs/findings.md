@@ -271,3 +271,43 @@ one-connection-at-a-time device.
 - `AmbientLight.LightStep` has never been written, only reported.
 - Whether `AirCirculation.FanLevel` is the right control while ventilating, or
   whether the app uses `AirCooling.Mode` there too. Only one write was seen.
+
+## A host Bluetooth adapter is not enough
+
+The appliance advertises under a fast-rotating Resolvable Private Address and
+accepts an encrypted reconnect only from a client that can resolve that address
+back to the stored bond. A phone's controller does this; **BlueZ does not**.
+It can complete the pairing, but every later reconnect arrives on an address it
+cannot map to the key and the link is dropped.
+
+This was established independently and exhaustively by
+[rpodgorny/hass-truma-inetx](https://github.com/rpodgorny/hass-truma-inetx)
+against the same protocol — IRK stored, LL-Privacy enabled, three different
+adapters — and it fails at the controller level regardless of configuration.
+
+Our own captures are consistent with it: the pairing exchange ran against
+`4C:1D:BB:...` while the appliance's identity address is `FC:DE:C5:...`, and
+the address differed again on later connections.
+
+An ESPHome Bluetooth proxy built on **esp-idf** resolves private addresses in
+the controller the way a phone does, and works. An Arduino-framework build does
+not.
+
+## Prior art
+
+Two projects cover this protocol already, and both are worth knowing about:
+
+- [daaaaan/truma-inetx-ble](https://github.com/daaaaan/truma-inetx-ble) —
+  the protocol reference this work builds on, reverse engineered against a
+  Combi D 4 E behind an iNet X panel. Mirrored in
+  [`truma-inetx-protocol-reference.md`](truma-inetx-protocol-reference.md).
+- [rpodgorny/hass-truma-inetx](https://github.com/rpodgorny/hass-truma-inetx) —
+  a mature Home Assistant integration for an iNet X panel driving a Combi:
+  heating, water heating, energy sources, a fan control, a custom dashboard
+  card, and the proxy finding above. GPL-3.0.
+
+Neither targets an Aventa. A Combi offers Off, Heat and Fan-only; an Aventa
+adds cooling, dehumidifying and heat-pump heating, and has an ambient light.
+That difference is why this integration exists. No code is taken from either —
+this implementation is built from our own captures — but the facts they
+established saved a great deal of time and are credited where used.

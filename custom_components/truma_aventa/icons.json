@@ -1,0 +1,9 @@
+{
+  "entity": {
+    "light": {
+      "ambient_light": {
+        "default": "mdi:led-strip-variant"
+      }
+    }
+  }
+}
