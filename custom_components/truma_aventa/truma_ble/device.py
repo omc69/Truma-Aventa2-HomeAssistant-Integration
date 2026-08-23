@@ -506,10 +506,10 @@ class TrumaBleDevice:
                 self._stream.pending,
                 self._stream.dropped - before,
             )
-        changed: dict[str, Any] = {}
+        touched = False
         for frame in frames:
             try:
-                changed.update(self._handle_frame(frame))
+                changed = self._handle_frame(frame)
             except Exception:
                 # bleak swallows anything raised in a notification callback, so
                 # a decoding fault is indistinguishable from a silent
@@ -519,9 +519,17 @@ class TrumaBleDevice:
                     self._name,
                     frame.src,
                 )
-        if changed:
+                continue
+            if not changed:
+                continue
+            # Applied before the next frame is read rather than merged at the
+            # end: a frame builds its parameter map from the stored state, so
+            # collecting several and applying the last would drop everything
+            # the earlier ones added.
             self.state = self.state.with_values(changed)
+            touched = True
             _LOGGER.debug("%s: state changed: %s", self._name, sorted(changed))
+        if touched:
             self._notify()
 
     def _schedule_command(self, payload: bytes) -> None:
