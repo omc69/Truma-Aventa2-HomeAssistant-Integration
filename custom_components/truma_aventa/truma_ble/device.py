@@ -84,6 +84,10 @@ _FIELD_MAP: dict[tuple[str, str], str] = {
     (TOPIC_AIR_COOLING, "Temp"): "current_temperature",
     (TOPIC_AIR_HEATING, "Mode"): "heating_fan_mode",
     (TOPIC_AIR_CIRCULATION, "FanLevel"): "fan_level",
+    (TOPIC_AIR_COOLING, "Active"): "cooling_active",
+    (TOPIC_AIR_HEATING, "Active"): "heating_active",
+    (TOPIC_AIR_CIRCULATION, "Active"): "circulation_active",
+    (TOPIC_AIR_DEHUMID, "Active"): "dehumid_active",
     (TOPIC_AMBIENT_LIGHT, "Active"): "light_on",
     (TOPIC_AMBIENT_LIGHT, "LightStep"): "light_step",
     (TOPIC_IDENTIFY, "Name"): "name",
@@ -591,12 +595,14 @@ class TrumaBleDevice:
         if "LastMessage" in body and _LOGGER.isEnabledFor(logging.DEBUG):
             # The sentinel ends a discovery burst, which is the one moment the
             # full inventory of what this appliance reports is known.
+            prefix = f"{frame.src:04X}/"
+            own = sorted(key for key in raw if key.startswith(prefix))
             _LOGGER.debug(
                 "%s: 0x%04X reported %d parameter(s): %s",
                 self._name,
                 frame.src,
-                len(raw),
-                ", ".join(f"{key}={raw[key]!r}" for key in sorted(raw)),
+                len(own),
+                ", ".join(f"{key[len(prefix) :]}={raw[key]!r}" for key in own),
             )
         if _LOGGER.isEnabledFor(logging.DEBUG):
             _LOGGER.debug(

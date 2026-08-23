@@ -7,6 +7,7 @@ from typing import Any, ClassVar
 from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
+    HVACAction,
     HVACMode,
 )
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
@@ -86,6 +87,29 @@ class TrumaClimate(TrumaEntity, ClimateEntity):
         """Current operating mode."""
         mode = self.coordinator.data.mode
         return _MODE_TO_HVAC.get(mode) if mode is not None else None
+
+    @property
+    def hvac_action(self) -> HVACAction | None:
+        """What the appliance is doing, as opposed to what it was asked to do.
+
+        Each function reports separately whether it is running, which is the
+        only way to tell a compressor that has reached the target from one
+        that is still working towards it.
+        """
+        data = self.coordinator.data
+        if data.mode == MODE_OFF:
+            return HVACAction.OFF
+        if data.cooling_active:
+            return HVACAction.COOLING
+        if data.heating_active:
+            return HVACAction.HEATING
+        if data.dehumid_active:
+            return HVACAction.DRYING
+        if data.circulation_active:
+            return HVACAction.FAN
+        if data.mode is None:
+            return None
+        return HVACAction.IDLE
 
     @property
     def current_temperature(self) -> float | None:

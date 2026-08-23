@@ -45,6 +45,13 @@ class TrumaState:
     #: AirCirculation, used while ventilating.
     fan_level: int | None = None
 
+    #: Whether each function is actually running. The mode says what the
+    #: appliance was asked to do; these say what it is doing.
+    cooling_active: int | None = None
+    heating_active: int | None = None
+    circulation_active: int | None = None
+    dehumid_active: int | None = None
+
     #: AmbientLight.
     light_on: int | None = None
     light_step: int | None = None

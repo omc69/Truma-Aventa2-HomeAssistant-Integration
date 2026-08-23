@@ -23,6 +23,7 @@ tested.
 | Target temperature | 16–30 °C |
 | Current temperature | as the appliance measures it |
 | Fan | Auto, Low, Mid, High, Night |
+| Action | what the appliance is *doing*: cooling, heating, drying, fan, idle |
 
 The modes are the ones the appliance reports about itself. Plain heating is
 absent on purpose: an Aventa heats through the heat pump, which is the
