@@ -348,13 +348,16 @@ class TrumaBleDevice:
 
     def _on_data(self, _sender: BleakGATTCharacteristic, data: bytearray) -> None:
         """Consume inbound messages."""
-        frames = self._stream.feed(bytes(data))
-        if frames:
-            # One acknowledgement per completed message, not per notification:
-            # a long message arrives in several packets and is still one frame.
-            # The resulting steady traffic is also what keeps the link alive,
-            # so no keepalive of our own is needed.
+        raw = bytes(data)
+        if raw:
+            # Acknowledge every inbound notification, which is what the app
+            # does. Acknowledging only completed messages instead made the
+            # appliance answer f0 04 -- AckDataTransfer with TIMEOUT_ON_SEND --
+            # every five seconds: it was waiting for an acknowledgement that
+            # never came. The resulting steady traffic is also what keeps the
+            # link alive, so no keepalive of our own is needed.
             self._schedule_command(ACK_DATA)
+        frames = self._stream.feed(raw)
         changed: dict[str, Any] = {}
         for frame in frames:
             changed.update(self._handle_frame(frame))

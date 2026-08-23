@@ -27,6 +27,17 @@ from .truma_ble import ADVERTISED_NAME_PREFIX, TRUMA_MANUFACTURER_ID
 from .truma_ble.const import KNOWN_INTERFACE_UUIDS
 
 
+def _unique_id(info: BluetoothServiceInfoBleak) -> str:
+    """A handle for the appliance that survives its address changing.
+
+    The appliance rotates its Bluetooth address, so keying an entry on the
+    address produces a fresh "new device" every few minutes -- three config
+    entries appeared for one appliance during testing. The advertised name
+    carries the unit's own identifier and does not change.
+    """
+    return info.name or info.address
+
+
 def _is_truma(info: BluetoothServiceInfoBleak) -> bool:
     """Whether an advertisement looks like a Truma appliance.
 
@@ -51,12 +62,13 @@ class TrumaConfigFlow(ConfigFlow, domain=DOMAIN):
         self._discovered: dict[str, str] = {}
         self._address: str | None = None
         self._title: str | None = None
+        self._unique_ids: dict[str, str] = {}
 
     async def async_step_bluetooth(
         self, discovery_info: BluetoothServiceInfoBleak
     ) -> ConfigFlowResult:
         """Handle an appliance discovered by the Bluetooth integration."""
-        await self.async_set_unique_id(discovery_info.address)
+        await self.async_set_unique_id(_unique_id(discovery_info))
         self._abort_if_unique_id_configured()
         self._discovery = discovery_info
         self.context["title_placeholders"] = {"name": discovery_info.name}
@@ -84,18 +96,22 @@ class TrumaConfigFlow(ConfigFlow, domain=DOMAIN):
         """Pick an appliance from the ones in range."""
         if user_input is not None:
             address = user_input[CONF_ADDRESS]
-            await self.async_set_unique_id(address, raise_on_progress=False)
+            await self.async_set_unique_id(
+                self._unique_ids.get(address, address), raise_on_progress=False
+            )
             self._abort_if_unique_id_configured()
             self._address = address
             self._title = self._discovered.get(address, address)
             return await self.async_step_pair()
 
         configured = self._async_current_ids()
-        self._discovered = {
-            info.address: f"{info.name} ({info.address})"
-            for info in async_discovered_service_info(self.hass, connectable=True)
-            if _is_truma(info) and info.address not in configured
-        }
+        self._discovered = {}
+        self._unique_ids = {}
+        for info in async_discovered_service_info(self.hass, connectable=True):
+            if not _is_truma(info) or _unique_id(info) in configured:
+                continue
+            self._discovered[info.address] = f"{info.name} ({info.address})"
+            self._unique_ids[info.address] = _unique_id(info)
         if not self._discovered:
             return self.async_abort(reason="no_devices_found")
 
