@@ -146,11 +146,34 @@ def test_stream_reassembles_a_split_frame() -> None:
     assert frames[0].mbp_type == MBP_SUBSCRIBE
 
 
-def test_stream_resynchronises_past_garbage() -> None:
-    """Leading bytes that are not a header must not swallow the frame."""
+def test_stream_drops_what_cannot_be_a_frame() -> None:
+    """A notification that does not begin with a header is dropped whole.
+
+    Stepping through it byte by byte looking for a header is what used to
+    happen, and it is worse than losing the notification: a CBOR body is full
+    of header-shaped bytes, so the search latches onto one and every later
+    message is then consumed as part of a phantom frame.
+    """
     stream = FrameStream()
-    frames = stream.feed(bytes.fromhex("aabbccdd") + WRITE_LIGHT_ON)
+    assert stream.feed(bytes.fromhex("aabbccdd") + WRITE_LIGHT_ON) == []
+    assert stream.dropped
+    assert stream.pending == 0
+
+
+def test_stream_recovers_after_a_truncated_message() -> None:
+    """One incomplete message must not cost every message after it.
+
+    Observed on the appliance: each notification carries exactly one whole
+    message, so a leftover that is still waiting when a complete message
+    arrives can never be completed and must not be glued to its front.
+    """
+    stream = FrameStream()
+    assert stream.feed(SUBSCRIBE[:40]) == []
+    frames = stream.feed(WRITE_LIGHT_ON)
     assert [f.dest for f in frames] == [0x0801]
+    assert stream.pending == 0
+    frames = stream.feed(WRITE_CLIMATE_MODE)
+    assert [f.dest for f in frames] == [ADDR_INTERFACE]
 
 
 @pytest.mark.parametrize(

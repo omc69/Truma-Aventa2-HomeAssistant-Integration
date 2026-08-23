@@ -130,8 +130,28 @@ def parse(frame: bytes) -> Frame | None:
     )
 
 
+def _is_whole_frame(data: bytes) -> bool:
+    """True when these bytes are exactly one frame, nothing more or less."""
+    total = frame_length(data)
+    return total is not None and total == len(data)
+
+
 class FrameStream:
-    """Reassembles notification chunks into whole frames."""
+    """Reassembles notification chunks into whole frames.
+
+    Every message begins on a notification boundary: the appliance announces
+    each message's length on the command characteristic before it sends the
+    message itself. Nothing else is guaranteed -- a message longer than the
+    MTU still continues in the following notification -- so frames are cut by
+    the length their header declares.
+
+    What must never happen is resynchronising byte by byte. A frame carries no
+    checksum, so stepping through a CBOR body finds header-shaped bytes that
+    are not headers, and a single lost byte then desynchronises the stream for
+    good: every later message is consumed as another message's body and
+    disappears without a trace. Instead the buffer is dropped whole whenever
+    it cannot be what it claims to be, and the next notification starts clean.
+    """
 
     def __init__(self) -> None:
         """Start with an empty buffer."""
@@ -145,17 +165,24 @@ class FrameStream:
 
     def feed(self, data: bytes) -> list[Frame]:
         """Append received bytes and return every complete frame in them."""
+        if self._buf and _is_whole_frame(data):
+            # We are still waiting for the rest of a message, yet this
+            # notification is a whole message by itself. What we hold can
+            # never be completed, so it goes rather than being glued to the
+            # front of a good message.
+            self.dropped += len(self._buf)
+            self._buf.clear()
         self._buf += data
+
         frames: list[Frame] = []
         while len(self._buf) >= V3_HEADER_LEN:
             total = frame_length(self._buf)
             if total is None:
-                # Resynchronising discards a byte at a time. Counting them is
-                # what tells a healthy stream apart from one where whole
-                # messages are being thrown away unnoticed.
-                self.dropped += 1
-                del self._buf[:1]
-                continue
+                # The head of the buffer is not a header, and there is no
+                # earlier boundary to fall back to.
+                self.dropped += len(self._buf)
+                self._buf.clear()
+                break
             if len(self._buf) < total:
                 break
             if (parsed := parse(bytes(self._buf[:total]))) is not None:
