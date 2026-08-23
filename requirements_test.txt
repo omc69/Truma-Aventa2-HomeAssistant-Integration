@@ -1,3 +1,16 @@
 pytest>=8.0
 cbor2>=5.6.0
 ruff>=0.6
+
+# The entity layer is where the last two faults were -- a name used but never
+# imported, and an _attr_ read back on entities that never set it. Both raise
+# only when an entity writes its state, so testing them means importing the
+# integration, which means Home Assistant and the components it pulls in.
+homeassistant>=2026.8
+aiousbwatcher
+bleak
+bleak-retry-connector
+habluetooth
+pyserial
+serialx
+usb-devices
