@@ -62,8 +62,9 @@ def async_check_proxy(hass: HomeAssistant, entry_id: str, address: str) -> None:
 
     _LOGGER.warning(
         "%s is only reachable through this host's own Bluetooth adapter. "
-        "The appliance rotates its address and the link will keep dropping; "
-        "an ESPHome Bluetooth proxy on an esp-idf build is required",
+        "The appliance rotates its Bluetooth address, which a host adapter "
+        "may not resolve after a drop; an ESPHome Bluetooth proxy on an "
+        "esp-idf build reconnects reliably and reaches further",
         address,
     )
     ir.async_create_issue(

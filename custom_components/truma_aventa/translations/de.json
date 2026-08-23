@@ -39,8 +39,8 @@
   },
   "issues": {
     "no_bluetooth_proxy": {
-      "title": "Truma Aventa braucht einen Bluetooth-Proxy",
-      "description": "{address} ist nur über den Bluetooth-Adapter dieses Hosts erreichbar.\n\nDas Gerät wechselt seine Bluetooth-Adresse zwischen den Verbindungen und akzeptiert einen Reconnect nur von einem Client, der diese Adresse auf die Kopplung zurückführen kann. Der Host-Adapter von Home Assistant kann das nicht — die Verbindung bricht deshalb immer wieder ab, egal wie gut der Empfang ist.\n\nEin ESPHome-Bluetooth-Proxy auf Basis des esp-idf-Frameworks löst die Adresse so auf wie ein Handy. Platziere einen davon wenige Meter von der Anlage entfernt. Die Dokumentation enthält eine fertige Konfiguration."
+      "title": "Truma Aventa läuft ohne Bluetooth-Proxy",
+      "description": "{address} ist nur über den Bluetooth-Adapter dieses Hosts erreichbar.\n\nDas Gerät wechselt seine Bluetooth-Adresse zwischen den Verbindungen. Eine gehaltene Verbindung stört das nicht — diese Integration hält eine offen, und sie lief nach dem Pairing stundenlang am Stück über den Host-Adapter. Kritisch ist der Reconnect nach einem Abbruch: Das Gerät wirbt dann womöglich unter einer Adresse, die der Host-Adapter nicht auf die Kopplung zurückführen kann.\n\nEin ESPHome-Bluetooth-Proxy auf Basis des esp-idf-Frameworks löst diese Adresse so auf wie ein Handy und kann näher an der Anlage sitzen als der Host. Die Dokumentation enthält eine fertige Konfiguration."
     }
   }
 }

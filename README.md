@@ -60,18 +60,29 @@ happen, including changes made at the panel or from the app.
 
 Then **Download**, and restart Home Assistant.
 
-## An ESP32 Bluetooth proxy is required
+## An ESP32 Bluetooth proxy is recommended
 
-Not a preference. The appliance advertises under a **fast-rotating Resolvable
-Private Address** and only accepts an encrypted reconnect from a client that
-can resolve that address back to the stored bond. A phone's controller does
-this. **BlueZ does not** — it can pair the appliance, but every later reconnect
-arrives on an address it cannot map to the key, and the link is dropped.
+The appliance advertises under a **rotating Resolvable Private Address**, and
+an encrypted reconnect is only accepted from a client that can resolve that
+address back to the stored bond. A phone's controller does this in hardware;
+a host adapter running BlueZ may not.
 
-This was established independently and exhaustively by
-[rpodgorny/hass-truma-inetx](https://github.com/rpodgorny/hass-truma-inetx)
-against the same protocol — IRK stored, LL-Privacy enabled, three different
-adapters — and it fails at the controller level regardless.
+Measured on this system, though: once the appliance was bonded with
+`bluetoothctl`, a connection held through the host adapter ran for **hours at a
+time without a single drop**, across many rotation windows. A held connection
+never has to re-resolve anything, and this integration holds one open.
+
+So the risk is narrower than "it will not work": it is the reconnect after a
+drop, when the appliance may be advertising under an address the host cannot
+map to the bond. [rpodgorny/hass-truma-inetx](https://github.com/rpodgorny/hass-truma-inetx)
+hit exactly that against the same protocol, exhaustively — IRK stored,
+LL-Privacy enabled, three adapters — and concluded a proxy was needed.
+
+An earlier version of this page called the proxy mandatory and blamed BlueZ for
+constant drops. Those drops were this integration crashing in its own
+connection callback. The proxy is still worth having — it reconnects reliably
+and can sit metres from the appliance instead of wherever the server is — but
+the host adapter was not the fault.
 
 ESP-IDF resolves private addresses in the controller the way a phone does, so
 an [ESPHome Bluetooth proxy](https://esphome.io/components/bluetooth_proxy.html)

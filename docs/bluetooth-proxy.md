@@ -1,12 +1,22 @@
 # The Bluetooth proxy
 
-## Why it is mandatory here
+## Why it is recommended here
 
 The appliance advertises under a **rotating Resolvable Private Address** and
 accepts an encrypted reconnect only from a client that can resolve that address
-back to the stored bond. A phone's Bluetooth controller does this. **BlueZ does
-not** — it can complete the pairing, but every later reconnect arrives on an
-address it cannot map to the key, and the link is dropped.
+back to the stored bond. A phone's Bluetooth controller does this in hardware;
+a host adapter running BlueZ may not.
+
+What was actually measured here: after bonding with `bluetoothctl`, a
+connection held through the host adapter ran for hours without dropping,
+through many rotation windows. A held connection never re-resolves anything.
+The exposure is the reconnect after a drop, not the steady state.
+
+This section previously called the proxy mandatory and attributed frequent
+drops to BlueZ. Those drops came from a fault in this integration, which
+crashed inside its own connection callback and tore the link down every two
+minutes. That is worth stating plainly: the measurement that condemned the
+adapter was measuring a bug.
 
 Our own captures show the rotation directly. Across four traces the appliance
 connected under three different addresses:

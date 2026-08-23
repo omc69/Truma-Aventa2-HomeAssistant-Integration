@@ -365,13 +365,26 @@ truncated message then costs itself and nothing after it.
 - Whether `AirCirculation.FanLevel` is the right control while ventilating, or
   whether the app uses `AirCooling.Mode` there too. Only one write was seen.
 
-## A host Bluetooth adapter is not enough
+## A host Bluetooth adapter: what was actually measured
 
 The appliance advertises under a fast-rotating Resolvable Private Address and
 accepts an encrypted reconnect only from a client that can resolve that address
-back to the stored bond. A phone's controller does this; **BlueZ does not**.
-It can complete the pairing, but every later reconnect arrives on an address it
-cannot map to the key and the link is dropped.
+back to the stored bond. A phone's controller does this in hardware; a host
+adapter running BlueZ may not.
+
+**Corrected.** This section used to say the link is dropped on every reconnect
+and that a proxy is mandatory. On this system, after bonding with
+`bluetoothctl`, the link held through the host adapter for over two hours
+continuously — many rotation windows — with every parameter still updating.
+
+The drops that produced the original claim were this integration raising an
+exception inside its connection callback, which tore the link down roughly
+every two minutes. Attributing them to the adapter was a mistake: the
+measurement was of a bug, not of BlueZ.
+
+The narrower claim stands: a *reconnect* after a drop can fail, because the
+appliance may by then advertise under an address the host cannot map to the
+bond, and that is what rpodgorny hit.
 
 This was established independently and exhaustively by
 [rpodgorny/hass-truma-inetx](https://github.com/rpodgorny/hass-truma-inetx)
