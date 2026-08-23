@@ -27,8 +27,24 @@ DATA_READ_CHAR_UUID: Final = f"fc314003{UUID_SUFFIX}"
 CMD_ALT_CHAR_UUID: Final = f"fc314004{UUID_SUFFIX}"
 
 #: Advertised by the appliance; used to recognise it while scanning.
+#:
+#: The local name is the obvious handle but the least reliable one -- it is
+#: not in every advertisement. These service UUIDs are, and they also say what
+#: kind of appliance is behind them: an Aventa advertises FC310003, which the
+#: protocol reference calls "Interface AC".
 ADVERTISED_NAME_PREFIX: Final = "Truma"
 TRUMA_MANUFACTURER_ID: Final = 3187
+
+ADVERTISED_SERVICE_UUIDS: Final = (
+    f"fc310003{UUID_SUFFIX}",  # Interface AC
+    f"fc314000{UUID_SUFFIX}",  # data service group
+)
+
+#: Every panel and interface type the protocol defines, so an appliance that
+#: is not an Aventa is still recognised rather than silently ignored.
+KNOWN_INTERFACE_UUIDS: Final = tuple(
+    f"fc31000{index}{UUID_SUFFIX}" for index in range(7)
+)
 
 # --- Transport FSM (on CMD_CHAR) -------------------------------------------
 

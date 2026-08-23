@@ -3,17 +3,32 @@
   "name": "Truma Aventa",
   "bluetooth": [
     {
-      "local_name": "Truma*",
+      "service_uuid": "fc310003-f3b2-11e8-8eb2-f2801f1b9fd1",
+      "connectable": true
+    },
+    {
+      "service_uuid": "fc314000-f3b2-11e8-8eb2-f2801f1b9fd1",
+      "connectable": true
+    },
+    {
+      "manufacturer_id": 3187,
       "connectable": true
     }
   ],
-  "codeowners": ["@omc69"],
+  "codeowners": [
+    "@omc69"
+  ],
   "config_flow": true,
-  "dependencies": ["bluetooth_adapters"],
+  "dependencies": [
+    "bluetooth_adapters"
+  ],
   "documentation": "https://github.com/omc69/Truma-Aventa2-HomeAssistant-Integration",
   "integration_type": "device",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/omc69/Truma-Aventa2-HomeAssistant-Integration/issues",
-  "requirements": ["bleak-retry-connector>=3.5.0", "cbor2>=5.6.0"],
-  "version": "0.3.0"
+  "requirements": [
+    "bleak-retry-connector>=3.5.0",
+    "cbor2>=5.6.0"
+  ],
+  "version": "0.4.0"
 }

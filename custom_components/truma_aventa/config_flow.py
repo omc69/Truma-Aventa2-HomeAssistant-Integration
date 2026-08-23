@@ -23,11 +23,20 @@ from homeassistant.const import CONF_ADDRESS
 
 from .const import DOMAIN
 from .pairing import async_pair
-from .truma_ble import ADVERTISED_NAME_PREFIX
+from .truma_ble import ADVERTISED_NAME_PREFIX, TRUMA_MANUFACTURER_ID
+from .truma_ble.const import KNOWN_INTERFACE_UUIDS
 
 
 def _is_truma(info: BluetoothServiceInfoBleak) -> bool:
-    """Whether an advertisement looks like a Truma appliance."""
+    """Whether an advertisement looks like a Truma appliance.
+
+    Three ways, because none of them is present in every advertisement: the
+    interface service UUID, the manufacturer id, and finally the local name.
+    """
+    if any(uuid in info.service_uuids for uuid in KNOWN_INTERFACE_UUIDS):
+        return True
+    if TRUMA_MANUFACTURER_ID in info.manufacturer_data:
+        return True
     return bool(info.name) and info.name.startswith(ADVERTISED_NAME_PREFIX)
 
 
