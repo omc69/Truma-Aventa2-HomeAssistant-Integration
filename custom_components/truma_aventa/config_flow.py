@@ -49,6 +49,8 @@ class TrumaConfigFlow(ConfigFlow, domain=DOMAIN):
         """Initialise the flow."""
         self._discovery: BluetoothServiceInfoBleak | None = None
         self._discovered: dict[str, str] = {}
+        self._address: str | None = None
+        self._title: str | None = None
 
     async def async_step_bluetooth(
         self, discovery_info: BluetoothServiceInfoBleak
@@ -66,9 +68,9 @@ class TrumaConfigFlow(ConfigFlow, domain=DOMAIN):
         """Confirm adding a discovered appliance, bonding with it first."""
         assert self._discovery is not None
         if user_input is not None:
-            return await self._async_pair_and_create(
-                self._discovery.address, self._discovery.name
-            )
+            self._address = self._discovery.address
+            self._title = self._discovery.name
+            return await self.async_step_pair()
 
         self._set_confirm_only()
         return self.async_show_form(
@@ -80,17 +82,13 @@ class TrumaConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Pick an appliance from the ones in range."""
-        errors: dict[str, str] = {}
         if user_input is not None:
             address = user_input[CONF_ADDRESS]
             await self.async_set_unique_id(address, raise_on_progress=False)
             self._abort_if_unique_id_configured()
-            result = await self._async_pair_and_create(
-                address, self._discovered.get(address, address)
-            )
-            if result is not None:
-                return result
-            errors["base"] = "cannot_pair"
+            self._address = address
+            self._title = self._discovered.get(address, address)
+            return await self.async_step_pair()
 
         configured = self._async_current_ids()
         self._discovered = {
@@ -106,23 +104,47 @@ class TrumaConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {vol.Required(CONF_ADDRESS): vol.In(self._discovered)}
             ),
-            errors=errors,
         )
 
-    async def _async_pair_and_create(
-        self, address: str, title: str
-    ) -> ConfigFlowResult | None:
-        """Bond with the appliance, then create the entry.
+    async def async_step_pair(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Ask for pairing to be started on the appliance, then bond.
 
-        Bonding happens here rather than at first connect because the appliance
-        only accepts a client it has bonded with, and because a failure at this
-        point can still be explained to the person standing in front of it —
-        the appliance has to be in its pairing state and have a free client
-        slot.
+        The order matters and cannot be worked around. The appliance accepts a
+        new client only while it is in its pairing state, and that state lasts
+        a short while — so the person has to press the button on the unit
+        *before* this step runs, not after it has already failed. Pairing
+        silently in the background would fail the first time for everyone.
         """
-        ble_device = async_ble_device_from_address(self.hass, address, connectable=True)
+        assert self._address is not None
+
+        if user_input is None:
+            return self.async_show_form(
+                step_id="pair",
+                description_placeholders={"name": self._title or self._address},
+            )
+
+        ble_device = async_ble_device_from_address(
+            self.hass, self._address, connectable=True
+        )
         if ble_device is None:
-            return self.async_abort(reason="not_reachable")
+            return self.async_show_form(
+                step_id="pair",
+                description_placeholders={"name": self._title or self._address},
+                errors={"base": "not_reachable"},
+            )
+
         if not await async_pair(ble_device):
-            return None
-        return self.async_create_entry(title=title, data={CONF_ADDRESS: address})
+            # Stay on this step rather than abort: the usual remedy is to start
+            # pairing on the unit again and press Submit once more, and our own
+            # captures show a refusal followed by a successful retry.
+            return self.async_show_form(
+                step_id="pair",
+                description_placeholders={"name": self._title or self._address},
+                errors={"base": "cannot_pair"},
+            )
+
+        return self.async_create_entry(
+            title=self._title or self._address, data={CONF_ADDRESS: self._address}
+        )

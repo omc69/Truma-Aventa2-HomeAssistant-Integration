@@ -82,8 +82,17 @@ is not left looking like a bug.
 
 ## Pairing
 
-**The integration pairs for you.** Setup bonds with the appliance before
-creating the entry, so there is no terminal to open.
+**The integration pairs for you** — but the order matters and cannot be worked
+around:
+
+1. Add the integration and pick the appliance.
+2. Setup then asks you to **start pairing at the unit itself**.
+3. Do that, then continue in Home Assistant.
+
+The appliance accepts a new client only while its pairing state is active, and
+that state lasts a short while — so it has to be started *before* the step
+runs, not after it has already failed. Setup stays on that step if pairing is
+refused, so you can start it again and retry without beginning over.
 
 Pairing needs **no PIN**. The appliance reports itself as *NoInputNoOutput* and
 does not request MITM protection, so this is Bluetooth **Just Works** — decoded

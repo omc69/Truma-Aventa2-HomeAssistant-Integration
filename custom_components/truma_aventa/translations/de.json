@@ -9,16 +9,20 @@
         }
       },
       "confirm": {
-        "description": "Möchtest du {name} einrichten?\n\nDas Gerät akzeptiert nur einen Host, mit dem es gekoppelt wurde. Falls die Kopplung noch fehlt, hole sie zuerst nach — die Dokumentation beschreibt, wie."
+        "description": "Möchtest du {name} einrichten?"
+      },
+      "pair": {
+        "title": "Kopplung an der Anlage starten",
+        "description": "Versetze **{name}** zuerst an der Anlage selbst in den Kopplungsmodus.\n\nDas Gerät akzeptiert einen neuen Client nur, solange die Kopplung aktiv ist — und das nur kurz. Starte sie also jetzt und fahre dann hier fort. Eine PIN wird nicht abgefragt.\n\nKlappt es beim ersten Mal nicht, Kopplung erneut starten und noch einmal versuchen. Eine Abweisung mit erfolgreichem zweiten Versuch ist normal.\n\nScheitert es weiterhin, hat die Anlage keinen freien Client-Slot. Entferne in der Truma-App ein nicht mehr genutztes Gerät und versuche es erneut."
       }
     },
     "abort": {
       "already_configured": "Dieses Gerät ist bereits eingerichtet",
-      "no_devices_found": "Kein Truma-Gerät in Reichweite gefunden. Prüfe, ob es eingeschaltet und in Reichweite eines verbindungsfähigen Bluetooth-Adapters ist.",
-      "not_reachable": "Das Gerät war eben noch in Reichweite, jetzt nicht mehr. Es wechselt seine Bluetooth-Adresse ständig — bitte erneut versuchen."
+      "no_devices_found": "Kein Truma-Gerät in Reichweite gefunden. Prüfe, ob es eingeschaltet und in Reichweite eines verbindungsfähigen Bluetooth-Adapters ist."
     },
     "error": {
-      "cannot_pair": "Kopplung fehlgeschlagen. Das Gerät akzeptiert neue Clients nur, solange es im Kopplungsmodus ist und ein Slot frei ist — starte die Kopplung an der Anlage oder entferne in der Truma-App ein nicht mehr genutztes Gerät, dann erneut versuchen."
+      "cannot_pair": "Die Anlage hat die Kopplung abgelehnt. Starte die Kopplung an der Anlage erneut und versuche es nochmal — oder mache einen Client-Slot frei, indem du in der Truma-App ein ungenutztes Gerät entfernst.",
+      "not_reachable": "Die Anlage ist gerade nicht erreichbar. Sie wechselt ständig ihre Bluetooth-Adresse; kurz warten und erneut versuchen."
     }
   },
   "entity": {

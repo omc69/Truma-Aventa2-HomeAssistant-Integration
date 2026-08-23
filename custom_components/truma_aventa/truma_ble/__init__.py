@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from .const import (
     ADVERTISED_NAME_PREFIX,
+    ADVERTISED_SERVICE_UUIDS,
+    KNOWN_INTERFACE_UUIDS,
     FAN_MODES,
     MAX_LIGHT_STEP,
     MAX_TEMPERATURE,
@@ -26,12 +28,15 @@ from .const import (
     TOPIC_AIR_HEATING,
     TOPIC_AMBIENT_LIGHT,
     TOPIC_ROOM_CLIMATE,
+    TRUMA_MANUFACTURER_ID,
 )
 from .frames import Frame, FrameStream, build, build_mbp, parse
 from .models import TrumaState, degrees_to_tenths, tenths_to_degrees
 
 __all__ = [
     "ADVERTISED_NAME_PREFIX",
+    "ADVERTISED_SERVICE_UUIDS",
+    "KNOWN_INTERFACE_UUIDS",
     "FAN_MODES",
     "MAX_LIGHT_STEP",
     "MAX_TEMPERATURE",
@@ -49,6 +54,7 @@ __all__ = [
     "TOPIC_AIR_HEATING",
     "TOPIC_AMBIENT_LIGHT",
     "TOPIC_ROOM_CLIMATE",
+    "TRUMA_MANUFACTURER_ID",
     "Frame",
     "FrameStream",
     "TrumaState",
