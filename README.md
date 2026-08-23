@@ -35,11 +35,12 @@ Heat/Cool mode.
 everything else goes away. A link that keeps flapping is the signature of a
 missing proxy, and that is only visible if something reports the link itself.
 
-**Sensors — every parameter the bus reports.** The appliance answers parameter
-discovery with everything it knows about itself: 88 values on the air
-conditioning alone, from measured temperatures and mains presence to error
-codes, firmware revisions and timer configuration. Each becomes a diagnostic
-sensor, grouped under the device that reported it.
+**Sensors — every parameter the bus reports.** Each device answers parameter
+discovery with everything it knows about itself: 32 values on the air
+conditioning, 60 on the interface, and a handful each from the rest — measured
+temperatures, mains presence, error codes, firmware revisions, timer
+configuration. Every one becomes a diagnostic sensor, grouped under the device
+that reported it. On this system that is 126 sensors across eight devices.
 
 A Truma system answers on more addresses than it has devices — the interface
 here answers on three, all reporting the same parameters under one

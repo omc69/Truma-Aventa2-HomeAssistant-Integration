@@ -44,13 +44,24 @@ reference's warning that doing so breaks the transport.
 
 Discovered from parameter discovery in capture 1.
 
-| Address | Identifies as | Notes |
+Counted per address, from a sweep where each device was asked separately.
+
+| Address | Identifies as | Own parameters |
 |---|---|---|
-| `0x0101` | **`iNet X Interface AC`**, `Identify.Type` = 10 (INTERFACE) | takes `RoomClimate` commands |
-| `0x0601` | blePeripheral | `BleDeviceManagement`, `DeviceManagement` |
-| `0x0702` | same serial as `0x0801` | `Identify` only |
-| `0x0801` | **`Identify.Name` = `Aventa comfort 2. G`**, `Identify.Type` = 3 (AC) | **takes `AmbientLight` commands** |
+| `0x0101` | **`iNet X Interface AC`**, `Identify.Type` = 10 (INTERFACE), serial `IIIRTEU-A-…`, sw 3.5 | 60 — takes `RoomClimate` commands |
+| `0x0801` | **`Aventa comfort 2. G`**, `Identify.Type` = 3 (AC), serial `AVRLWZZ-A-…`, sw 1.6 | 32 — takes `AmbientLight`, `AirCooling`, `AirHeating` |
+| `0x0702` | same serial as `0x0801` | 7, `Identify` only |
+| `0x0601` | blePeripheral | 10 |
+| `0x0600` | `Blemcu`, `DeviceManagement` | 6 |
+| `0x0800` | `DeviceManagement`, `ErrorReset` | 6 |
+| `0x0200`, `0x0400` | `DeviceManagement` only | 3 each |
+| `0x0500` | app slot 0 | 6 |
 | `0x0501` | app slot 1 | address assigned to us at registration |
+
+Careful with cumulative counts: an inventory printed after each burst grows as
+the sweep proceeds, so "the appliance reports 88 parameters" was really "88
+parameters had been seen by then, across every device". Keyed per address, the
+air conditioning reports 32.
 
 `0x0801` is not in the reference's address table, which lists `0x0800` as
 CAN_SLAVE and `0x0202` as `tinAventa`. Our Aventa is neither — so the address
