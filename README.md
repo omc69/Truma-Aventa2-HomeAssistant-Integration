@@ -42,8 +42,10 @@ levels and the light. It also corrects the reference twice — the fan parameter
 is Auto/Low/Mid/High/Night rather than Comfort/Fast, and the ventilating fan
 range is 0–3 rather than 0–10. See [`docs/findings.md`](docs/findings.md).
 
-Only **pairing** is still missing before an integration can connect on its
-own.
+Pairing turned out to be plain Bluetooth **Just Works** — the appliance
+reports NoInputNoOutput and does not ask for MITM, so there is no PIN to enter
+and BlueZ can complete it unattended. That was the last unknown; the
+integration can be built.
 
 ## Tools
 

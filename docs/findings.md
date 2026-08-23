@@ -196,22 +196,47 @@ else belongs to the appliance.
 
 ## Pairing
 
-### It is ordinary BLE pairing
+### Plain Just Works pairing — no passkey
 
-A capture taken specifically to record pairing contained **no SMP traffic at
-all**. What it shows instead, three times over, is `LE Start Encryption`
-carrying a long-term key the phone already held — the bond had not been
-removed, so iOS simply re-encrypted an existing one.
+Captured. The exchange is ordinary Bluetooth Security Manager pairing, and
+crucially it needs **no PIN at all**, which contradicts the reference's note
+about a six-digit passkey.
 
-That is less of a setback than it looks. The absence of any proprietary
-handshake, combined with the reference's note that pairing is done through a
-standard BlueZ agent with a six-digit passkey, says this is plain Bluetooth
-Security Manager pairing. The operating system handles it; the integration
-does not implement it. What the integration does need is a way for the user to
-enter the passkey during setup, and somewhere to keep the resulting bond.
+The Security Manager parameters, decoded:
 
-What is still unknown is where the six digits come from — printed on the unit,
-shown on a display, or a fixed value the appliance exposes as `Blemcu.BtPin`.
+| Field | iPhone (initiator) | Aventa (responder) |
+|---|---|---|
+| IO Capability | `0x04` KeyboardDisplay | **`0x03` NoInputNoOutput** |
+| OOB data | none | none |
+| AuthReq | `0x2D` Bonding, MITM, Secure Connections | **`0x09` Bonding, Secure Connections** |
+| Max key size | 16 | 16 |
+
+KeyboardDisplay against NoInputNoOutput resolves to **Just Works** in the IO
+capability matrix, and the appliance does not set the MITM bit — so no passkey
+is requested or entered. What follows is a standard LE Secure Connections
+exchange: public keys, confirm, random, DHKey check, then identity information
+in both directions.
+
+This matters for the integration: BlueZ can complete this unattended with a
+NoInputNoOutput agent. Setup needs no PIN entry field.
+
+### Finding the appliance behind a private address
+
+The pairing runs against a **resolvable private address** that changes between
+connections. The appliance's real identity address only appears inside the
+pairing exchange, in Identity Address Information, as a **public** address.
+
+An integration must therefore work from the identity address that BlueZ
+resolves after bonding, not from whatever address a scan happens to report.
+
+### Pairing has to be allowed first
+
+A first attempt in the same capture was refused outright with
+`SMP Pairing Failed, reason 0x05 Pairing Not Supported`; a second attempt two
+minutes later succeeded. So the appliance does not accept pairing at any time
+— it has to be put into a pairing state, or a client slot has to be free
+(see the slot counts below). Worth surfacing in the integration's setup
+instructions rather than presenting a bare failure.
 
 ### Application-level identity
 
