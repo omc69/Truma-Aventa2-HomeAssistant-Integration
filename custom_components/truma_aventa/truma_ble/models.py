@@ -54,8 +54,13 @@ class TrumaState:
     serial_number: str | None = None
     software_version: str | None = None
 
-    #: Every parameter seen, keyed "Topic.Parameter", for diagnostics.
+    #: Every parameter seen, keyed "ADDR/Topic.Parameter".
     raw: dict[str, Any] = field(default_factory=dict)
+
+    #: Addresses whose parameter discovery has run to its end. Until a device
+    #: has finished reporting, what identifies it may still be missing, and
+    #: entities built on a half-known identity would be built twice.
+    complete: frozenset[str] = frozenset()
 
     def with_values(self, values: dict[str, Any]) -> TrumaState:
         """Return a copy with ``values`` applied."""

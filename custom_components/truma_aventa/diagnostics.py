@@ -14,7 +14,13 @@ from homeassistant.core import HomeAssistant
 from .coordinator import TrumaConfigEntry
 
 #: Identifiers that say which appliance this is, or which client it trusts.
+#: Parameters are keyed "ADDR/Topic.Parameter"; redaction matches the tail.
 TO_REDACT = {"MobileIdentity.Muid", "MobileIdentity.Uuid", "Identify.SerialNr"}
+
+
+def _redacted(key: str, value: Any) -> Any:
+    """Hide anything that identifies the appliance or its owner."""
+    return "**redacted**" if key.rpartition("/")[2] in TO_REDACT else value
 
 
 async def async_get_config_entry_diagnostics(
@@ -38,7 +44,7 @@ async def async_get_config_entry_diagnostics(
             "light_step": state.light_step,
         },
         "parameters": {
-            key: ("**redacted**" if key in TO_REDACT else value)
+            key: _redacted(key, value)
             for key, value in sorted(state.raw.items())
         },
     }

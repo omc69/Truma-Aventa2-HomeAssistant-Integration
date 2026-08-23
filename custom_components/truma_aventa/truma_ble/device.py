@@ -569,7 +569,10 @@ class TrumaBleDevice:
         seen = 0
         for topic, parameter, value in _walk_parameters(body):
             seen += 1
-            raw[f"{topic}.{parameter}"] = value
+            # Keyed by the device that reported it: several devices on the bus
+            # carry the same topic, and a bare "Topic.Parameter" lets the
+            # interface's copy overwrite the appliance's.
+            raw[f"{frame.src:04X}/{topic}.{parameter}"] = value
             # The appliance identifies itself by owning these topics; its
             # address is not fixed and is not the one the reference lists.
             if (
@@ -583,6 +586,8 @@ class TrumaBleDevice:
                 changed[field] = value
         if raw != self.state.raw:
             changed["raw"] = raw
+        if "LastMessage" in body:
+            changed["complete"] = self.state.complete | {f"{frame.src:04X}"}
         if "LastMessage" in body and _LOGGER.isEnabledFor(logging.DEBUG):
             # The sentinel ends a discovery burst, which is the one moment the
             # full inventory of what this appliance reports is known.
