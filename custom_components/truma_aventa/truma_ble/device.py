@@ -23,7 +23,7 @@ from bleak_retry_connector import BleakClientWithServiceCache, establish_connect
 from .const import (
     ACK_DATA,
     ADDR_MESSAGE_BROKER,
-    ADDR_PANEL,
+    ADDR_INTERFACE,
     ADDR_UNREGISTERED,
     CMD_CHAR_UUID,
     CONFIRM_MSG_ACK,
@@ -42,6 +42,7 @@ from .const import (
     SUBSCRIBED_TOPICS,
     TOPIC_AIR_CIRCULATION,
     TOPIC_AIR_COOLING,
+    TOPIC_AIR_DEHUMID,
     TOPIC_AIR_HEATING,
     TOPIC_AMBIENT_LIGHT,
     TOPIC_IDENTIFY,
@@ -80,7 +81,13 @@ _FIELD_MAP: dict[tuple[str, str], str] = {
 #: the appliance's own address, which is learned at runtime; commands for
 #: RoomClimate go to the panel. Sending to the wrong one is ignored silently.
 _APPLIANCE_TOPICS = frozenset(
-    {TOPIC_AIR_COOLING, TOPIC_AIR_HEATING, TOPIC_AIR_CIRCULATION, TOPIC_AMBIENT_LIGHT}
+    {
+        TOPIC_AIR_COOLING,
+        TOPIC_AIR_HEATING,
+        TOPIC_AIR_CIRCULATION,
+        TOPIC_AIR_DEHUMID,
+        TOPIC_AMBIENT_LIGHT,
+    }
 )
 
 
@@ -281,10 +288,15 @@ class TrumaBleDevice:
             await asyncio.sleep(0.25)
 
     def _destination_for(self, topic: str) -> int:
-        """Which device owns a topic."""
+        """Which device owns a topic.
+
+        RoomClimate belongs to the interface, everything else to the appliance
+        itself, whose address is learned at runtime. Falling back to the
+        interface is safe: it is the address that exists on every system.
+        """
         if topic in _APPLIANCE_TOPICS and self._appliance is not None:
             return self._appliance
-        return ADDR_PANEL
+        return ADDR_INTERFACE
 
     async def _async_send(self, frame: bytes) -> None:
         """Send one frame through the transport handshake.
@@ -381,7 +393,7 @@ class TrumaBleDevice:
         raw = dict(self.state.raw)
         for topic, parameter, value in _walk_parameters(body):
             raw[f"{topic}.{parameter}"] = value
-            if topic in _APPLIANCE_TOPICS and frame.src not in (0, ADDR_PANEL):
+            if topic in _APPLIANCE_TOPICS and frame.src not in (0, ADDR_INTERFACE):
                 # The appliance identifies itself by owning these topics; its
                 # address is not fixed and is not the one the reference lists.
                 self._appliance = frame.src

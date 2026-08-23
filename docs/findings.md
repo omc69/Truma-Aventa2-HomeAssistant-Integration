@@ -46,7 +46,7 @@ Discovered from parameter discovery in capture 1.
 
 | Address | Identifies as | Notes |
 |---|---|---|
-| `0x0101` | panel | takes `RoomClimate` commands |
+| `0x0101` | **`iNet X Interface AC`**, `Identify.Type` = 10 (INTERFACE) | takes `RoomClimate` commands |
 | `0x0601` | blePeripheral | `BleDeviceManagement`, `DeviceManagement` |
 | `0x0702` | same serial as `0x0801` | `Identify` only |
 | `0x0801` | **`Identify.Name` = `Aventa comfort 2. G`**, `Identify.Type` = 3 (AC) | **takes `AmbientLight` commands** |
@@ -58,6 +58,25 @@ has to be discovered at runtime rather than assumed.
 
 `0x0702` and `0x0801` report the same serial number. They appear to be two
 faces of the same appliance; only `0x0801` carries the functional topics.
+
+**There is no iNet X panel in this system.** The protocol reference calls
+`0x0101` the panel because its system had one. Here the same address
+identifies itself as `iNet X Interface AC` with device type INTERFACE — the
+Aventa's own built-in BLE interface. The advertised name `Truma iNetX-<suffix>`
+is Truma's name for that interface, not evidence of a separate box. Same
+address, same role, different hardware.
+
+### Topics per device
+
+| Device | Topics |
+|---|---|
+| `0x0101` interface | `RoomClimate`, `TimerConfig`, `Temperature`, `TimeAndDate`, `PowerMgmt`, `System`, `Install`, `Eol`, `ErrorReset`, `DeviceManagement` |
+| `0x0801` appliance | `AirCooling`, `AirHeating`, `AirCirculation`, `AirDehumid`, `ACCAirCooling`, `ACCAirHeating`, `AmbientLight`, `LinePower`, `PowerMgmt`, `ErrorReset` |
+| `0x0601` BLE peripheral | `BleDeviceManagement`, `DeviceManagement` |
+
+`AirDehumid`, `ACCAirCooling` and `ACCAirHeating` appear in none of the prior
+work — they are Aventa-specific and presumably carry the fan settings for the
+dehumidifying and automatic modes.
 
 ## Command routing — confirmed
 

@@ -19,7 +19,7 @@ sys.path.insert(
 
 from truma_ble.const import (  # noqa: E402
     ADDR_MESSAGE_BROKER,
-    ADDR_PANEL,
+    ADDR_INTERFACE,
     ADDR_UNREGISTERED,
     CONTROL_MBP,
     CONTROL_REGISTRATION,
@@ -87,11 +87,11 @@ def test_light_command_goes_to_the_appliance() -> None:
     assert frame.body == {"tn": "AmbientLight", "pn": "Active", "v": 1}
 
 
-def test_climate_command_goes_to_the_panel() -> None:
-    """RoomClimate is owned by the panel, and switching on is mode 1."""
+def test_climate_command_goes_to_the_interface() -> None:
+    """RoomClimate is owned by the BLE interface, and switching on is mode 1."""
     frame = parse(WRITE_CLIMATE_MODE)
     assert frame is not None
-    assert frame.dest == ADDR_PANEL
+    assert frame.dest == ADDR_INTERFACE
     assert frame.mbp_type == MBP_WRITE
     assert frame.body == {"tn": "RoomClimate", "pn": "Mode", "v": 1}
 
@@ -134,7 +134,7 @@ def test_stream_splits_concatenated_frames() -> None:
     """Several frames can arrive in one notification."""
     stream = FrameStream()
     frames = stream.feed(WRITE_CLIMATE_MODE + WRITE_LIGHT_ON)
-    assert [f.dest for f in frames] == [ADDR_PANEL, 0x0801]
+    assert [f.dest for f in frames] == [ADDR_INTERFACE, 0x0801]
 
 
 def test_stream_reassembles_a_split_frame() -> None:

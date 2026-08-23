@@ -101,10 +101,15 @@ topic/parameter/value triplets. Turning the unit off is literally
 
 Two things are easy to get wrong and are worth knowing:
 
-- **Routing differs per function.** `RoomClimate` belongs to the panel;
-  `AmbientLight`, `AirCooling`, `AirHeating` and `AirCirculation` belong to
-  the appliance, whose address is not fixed and is learned at runtime. A
-  command sent to the wrong device is ignored without any error.
+- **Routing differs per function.** `RoomClimate` belongs to the appliance's
+  BLE interface; `AmbientLight`, `AirCooling`, `AirHeating`, `AirCirculation`
+  and `AirDehumid` belong to the appliance itself, whose address is not fixed
+  and is learned at runtime. A command sent to the wrong device is ignored
+  without any error.
+
+  No separate iNet X panel is needed. On an Aventa the interface is built in —
+  it identifies itself as `iNet X Interface AC`, which is also why the unit
+  advertises as `Truma iNetX-…`.
 - **The fan lives in three places.** Cooling and heating each carry their own
   fan parameter, and while ventilating it is `AirCirculation.FanLevel`. The
   integration writes whichever matches the running mode.

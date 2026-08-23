@@ -79,7 +79,12 @@ MBP_PARAM_DISCOVERY_RESPONSE: Final = 0x84
 # --- Device addresses ------------------------------------------------------
 
 ADDR_MESSAGE_BROKER: Final = 0x0000
-ADDR_PANEL: Final = 0x0101
+
+#: Owns RoomClimate. The protocol reference calls this address the panel,
+#: because its system had one; on an Aventa with no separate panel the same
+#: address identifies itself as "iNet X Interface AC", device type INTERFACE —
+#: the appliance's own BLE interface. Same address, same role, different box.
+ADDR_INTERFACE: Final = 0x0101
 ADDR_UNREGISTERED: Final = 0xFFFF
 ADDR_BROADCAST: Final = 0xFFFF
 
@@ -99,12 +104,15 @@ TOPIC_AMBIENT_LIGHT: Final = "AmbientLight"
 TOPIC_IDENTIFY: Final = "Identify"
 TOPIC_MOBILE_IDENTITY: Final = "MobileIdentity"
 
+TOPIC_AIR_DEHUMID: Final = "AirDehumid"
+
 #: Everything worth following. Subscribed in batches.
 SUBSCRIBED_TOPICS: Final = (
     TOPIC_ROOM_CLIMATE,
     TOPIC_AIR_COOLING,
     TOPIC_AIR_HEATING,
     TOPIC_AIR_CIRCULATION,
+    TOPIC_AIR_DEHUMID,
     TOPIC_AMBIENT_LIGHT,
     TOPIC_IDENTIFY,
 )
