@@ -285,9 +285,29 @@ This was established independently and exhaustively by
 against the same protocol — IRK stored, LL-Privacy enabled, three different
 adapters — and it fails at the controller level regardless of configuration.
 
-Our own captures are consistent with it: the pairing exchange ran against
-`4C:1D:BB:...` while the appliance's identity address is `FC:DE:C5:...`, and
-the address differed again on later connections.
+Our own captures confirm the appliance behaves this way. Across the four
+traces it connected under three different addresses:
+
+| Address | Kind | Occurrences |
+|---|---|---|
+| `FC:DE:C5:F0:A6:35` | public identity, resolved from a private address | 31 |
+| `4C:1D:BB:C7:D8:8F` | random | 5 |
+| `67:90:BE:21:D7:D0` | random | 4 |
+
+The pairing exchange itself ran against one of the random addresses, and the
+real identity appeared only inside it.
+
+### It is the same endpoint, not a different one
+
+Worth stating plainly, because the prior work is named after a panel: our
+Aventa **is** an iNet X BLE endpoint. It advertises as `Truma iNetX-<suffix>`,
+exposes the same characteristics, uses the same transport handshake and the
+same TruMessageV3/CBOR messages, and our system contains a panel device at
+`0x0101` that owns `RoomClimate` — whether that is a separate box or something
+internal to the appliance makes no difference to the protocol.
+
+So the difference between that project and this one is not how the connection
+is made. It is which appliance sits behind it.
 
 An ESPHome Bluetooth proxy built on **esp-idf** resolves private addresses in
 the controller the way a phone does, and works. An Arduino-framework build does
