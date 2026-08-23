@@ -117,11 +117,88 @@ Temperature, TimerConfig, Transfer, VBat, WaterHeating
 
 `Fridge`, `SubDevices` and `SystemTime` do not appear in the reference.
 
+## The complete control surface
+
+From capture 2 (every mode, target temperature, fan, light) plus the enum
+definitions the unit itself reports during parameter discovery. These are not
+inferred — the appliance names them.
+
+### `RoomClimate.Mode` → panel `0x0101`
+
+The master switch. Selecting a mode here is what turns the unit on.
+
+| Value | Name |
+|---|---|
+| 0 | Off |
+| 1 | ACC (automatic) |
+| 2 | Cooling |
+| 4 | HeatingAC |
+| 5 | Ventilating |
+| 6 | Dehumidifying |
+
+`3 = Heating` from the reference is **absent** on this unit — an Aventa heats
+via the heat pump, which is what `4 = HeatingAC` is.
+
+### `RoomClimate.TgtTemp` → panel `0x0101`
+
+Tenths of a degree, range 160–300, i.e. 16.0–30.0 °C. Confirmed by writes of
+160, 260 and 220.
+
+### `AirCooling.Mode` and `AirHeating.Mode` → Aventa `0x0801`
+
+The fan/power level within cooling or heating. **This corrects the
+reference**, which describes this parameter as `0 = COMFORT, 1 = FAST`. On our
+unit:
+
+| Value | Name |
+|---|---|
+| 0 | Auto |
+| 1 | Low |
+| 2 | Mid |
+| 3 | High |
+| 4 | Night |
+
+`AirCooling.TgtTemp` and `AirHeating.TgtTemp` exist separately on `0x0801`,
+same 160–300 range. The app writes the target temperature to `RoomClimate` on
+the panel, not to these.
+
+### `AirCirculation.FanLevel` → Aventa `0x0801`
+
+Fan level in ventilating mode. Range **0–3** on our unit — the reference says
+0–10, which does not apply here.
+
+### `AmbientLight` → Aventa `0x0801`
+
+| Parameter | Range | Notes |
+|---|---|---|
+| `Active` | 0 / 1 | confirmed by writes |
+| `LightStep` | 0–100 | brightness in percent; reported by discovery, not yet exercised by a capture |
+
+### Readings
+
+`AirCooling.Temp` and `AirHeating.Temp` carry the current room temperature in
+tenths of a degree, range −400 to 600. Read-only.
+
+## Mapping to Home Assistant
+
+The natural shape is one `climate` entity plus one `light` entity.
+
+| HA concept | Source |
+|---|---|
+| `hvac_mode` off / auto / cool / heat_cool / fan_only / dry | `RoomClimate.Mode` 0 / 1 / 2 / 4 / 5 / 6 |
+| `target_temperature`, 16–30 °C | `RoomClimate.TgtTemp` |
+| `current_temperature` | `AirCooling.Temp` |
+| `fan_mode` Auto / Low / Mid / High / Night | `AirCooling.Mode` or `AirHeating.Mode`, whichever matches the active mode; `AirCirculation.FanLevel` while ventilating |
+| light on/off and brightness | `AmbientLight.Active`, `AmbientLight.LightStep` |
+
+Note the split: mode and target temperature are panel parameters, everything
+else belongs to the appliance.
+
 ## Still open
 
-- Which value each **mode** button sends, and which modes this unit offers.
-- **Fan level**: whether it is `AirCirculation.FanLevel` and to which device.
-- **Target temperature**: expected as `RoomClimate.TgtTemp` in tenths of a
-  degree, unconfirmed.
-- Light **brightness** (`AmbientLight.LightStep`), if the unit has it.
-- The **pairing** exchange — capture 1 was made from an already-paired phone.
+- The **pairing** exchange. Both captures were made from an already-paired
+  phone, so the integration cannot yet connect on its own. This is the one
+  remaining blocker.
+- `AmbientLight.LightStep` has never been written, only reported.
+- Whether `AirCirculation.FanLevel` is the right control while ventilating, or
+  whether the app uses `AirCooling.Mode` there too. Only one write was seen.

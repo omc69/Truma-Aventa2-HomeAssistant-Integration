@@ -36,6 +36,15 @@ out of our own captures is set out in
   sent to the wrong device is ignored without complaint.
 - Switching on sends `RoomClimate.Mode = 1` — the automatic mode, not cooling.
 
+The second capture, together with the enum definitions the unit reports about
+itself, settled the whole control surface: modes, target temperature, fan
+levels and the light. It also corrects the reference twice — the fan parameter
+is Auto/Low/Mid/High/Night rather than Comfort/Fast, and the ventilating fan
+range is 0–3 rather than 0–10. See [`docs/findings.md`](docs/findings.md).
+
+Only **pairing** is still missing before an integration can connect on its
+own.
+
 ## Tools
 
 `tools/decode_truma_trace.py` reads a PacketLogger text export and prints the
