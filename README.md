@@ -82,19 +82,25 @@ is not left looking like a bug.
 
 ## Pairing
 
-Pair before adding the integration; the appliance will not talk to a client it
-has not bonded with.
+**The integration pairs for you.** Setup bonds with the appliance before
+creating the entry, so there is no terminal to open.
 
 Pairing needs **no PIN**. The appliance reports itself as *NoInputNoOutput* and
 does not request MITM protection, so this is Bluetooth **Just Works** — decoded
 from the Security Manager exchange in our own capture, which also contradicts
 the six-digit passkey the protocol reference mentions.
 
-If pairing is refused with `Pairing Not Supported`, the appliance is not
-accepting new clients at that moment. It has a limited number of client slots;
-remove a device you no longer use in the Truma app, or put the unit into its
-pairing state, and try again. A refusal was observed once in our captures, and
-a retry two minutes later succeeded.
+What you do have to do is put the appliance into its pairing state first. It
+refuses new clients otherwise, and it has a limited number of client slots — if
+setup reports that it could not pair, start pairing on the unit or remove a
+device you no longer use in the Truma app, then try again. A refusal followed
+by a successful retry two minutes later is exactly what our captures show.
+
+Bonding matters more than it first appears. Without it the appliance is not
+merely unusable: it is **undiscoverable**. Each rotation of its private address
+looks like a separate short-lived device, so nothing accumulates into something
+you can select. With a bond, the host resolves those addresses back to one
+identity.
 
 ## Requirements
 

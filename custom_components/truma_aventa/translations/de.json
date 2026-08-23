@@ -14,7 +14,11 @@
     },
     "abort": {
       "already_configured": "Dieses Gerät ist bereits eingerichtet",
-      "no_devices_found": "Kein Truma-Gerät in Reichweite gefunden. Prüfe, ob es eingeschaltet und in Reichweite eines verbindungsfähigen Bluetooth-Adapters ist."
+      "no_devices_found": "Kein Truma-Gerät in Reichweite gefunden. Prüfe, ob es eingeschaltet und in Reichweite eines verbindungsfähigen Bluetooth-Adapters ist.",
+      "not_reachable": "Das Gerät war eben noch in Reichweite, jetzt nicht mehr. Es wechselt seine Bluetooth-Adresse ständig — bitte erneut versuchen."
+    },
+    "error": {
+      "cannot_pair": "Kopplung fehlgeschlagen. Das Gerät akzeptiert neue Clients nur, solange es im Kopplungsmodus ist und ein Slot frei ist — starte die Kopplung an der Anlage oder entferne in der Truma-App ein nicht mehr genutztes Gerät, dann erneut versuchen."
     }
   },
   "entity": {

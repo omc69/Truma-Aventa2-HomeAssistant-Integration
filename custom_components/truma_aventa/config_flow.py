@@ -15,12 +15,14 @@ import voluptuous as vol
 
 from homeassistant.components.bluetooth import (
     BluetoothServiceInfoBleak,
+    async_ble_device_from_address,
     async_discovered_service_info,
 )
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_ADDRESS
 
 from .const import DOMAIN
+from .pairing import async_pair
 from .truma_ble import ADVERTISED_NAME_PREFIX
 
 
@@ -52,12 +54,11 @@ class TrumaConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Confirm adding a discovered appliance."""
+        """Confirm adding a discovered appliance, bonding with it first."""
         assert self._discovery is not None
         if user_input is not None:
-            return self.async_create_entry(
-                title=self._discovery.name,
-                data={CONF_ADDRESS: self._discovery.address},
+            return await self._async_pair_and_create(
+                self._discovery.address, self._discovery.name
             )
 
         self._set_confirm_only()
@@ -70,14 +71,17 @@ class TrumaConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Pick an appliance from the ones in range."""
+        errors: dict[str, str] = {}
         if user_input is not None:
             address = user_input[CONF_ADDRESS]
             await self.async_set_unique_id(address, raise_on_progress=False)
             self._abort_if_unique_id_configured()
-            return self.async_create_entry(
-                title=self._discovered.get(address, address),
-                data={CONF_ADDRESS: address},
+            result = await self._async_pair_and_create(
+                address, self._discovered.get(address, address)
             )
+            if result is not None:
+                return result
+            errors["base"] = "cannot_pair"
 
         configured = self._async_current_ids()
         self._discovered = {
@@ -93,4 +97,23 @@ class TrumaConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {vol.Required(CONF_ADDRESS): vol.In(self._discovered)}
             ),
+            errors=errors,
         )
+
+    async def _async_pair_and_create(
+        self, address: str, title: str
+    ) -> ConfigFlowResult | None:
+        """Bond with the appliance, then create the entry.
+
+        Bonding happens here rather than at first connect because the appliance
+        only accepts a client it has bonded with, and because a failure at this
+        point can still be explained to the person standing in front of it —
+        the appliance has to be in its pairing state and have a free client
+        slot.
+        """
+        ble_device = async_ble_device_from_address(self.hass, address, connectable=True)
+        if ble_device is None:
+            return self.async_abort(reason="not_reachable")
+        if not await async_pair(ble_device):
+            return None
+        return self.async_create_entry(title=title, data={CONF_ADDRESS: address})

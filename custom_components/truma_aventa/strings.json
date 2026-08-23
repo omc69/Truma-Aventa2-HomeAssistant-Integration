@@ -14,7 +14,11 @@
     },
     "abort": {
       "already_configured": "This appliance is already configured",
-      "no_devices_found": "No Truma appliance found in range. Make sure it is powered and within reach of a connectable Bluetooth adapter."
+      "no_devices_found": "No Truma appliance found in range. Make sure it is powered and within reach of a connectable Bluetooth adapter.",
+      "not_reachable": "The appliance was in range a moment ago but is not now. It changes its Bluetooth address constantly, so try again."
+    },
+    "error": {
+      "cannot_pair": "Could not pair with the appliance. It only accepts new clients while it is in its pairing state and has a free client slot — start pairing on the unit, or remove a device you no longer use in the Truma app, then try again."
     }
   },
   "entity": {
