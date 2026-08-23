@@ -34,6 +34,21 @@ Heat/Cool mode.
 everything else goes away. A link that keeps flapping is the signature of a
 missing proxy, and that is only visible if something reports the link itself.
 
+**Sensors — every parameter the bus reports.** The appliance answers parameter
+discovery with everything it knows about itself: 88 values on the air
+conditioning alone, from measured temperatures and mains presence to error
+codes, firmware revisions and timer configuration. Each becomes a diagnostic
+sensor, grouped under the device that reported it.
+
+A Truma system answers on more addresses than it has devices — the interface
+here answers on three, all reporting the same parameters under one
+`Identify.UniqueID`. Addresses that share an identity are folded into one Home
+Assistant device, so the list stays readable.
+
+Writing stays with the climate and light entities. Parameter discovery exposes
+`System.FactoryReset` and `DeviceManagement.Delete` alongside everything else,
+and a generic writable entity over that surface would be a foot-gun.
+
 Values are **pushed**: once subscribed, the appliance reports changes as they
 happen, including changes made at the panel or from the app.
 

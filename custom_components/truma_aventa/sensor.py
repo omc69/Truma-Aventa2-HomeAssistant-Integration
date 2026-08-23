@@ -47,6 +47,11 @@ _TEMPERATURES: Final = frozenset(
     }
 )
 
+#: Our own pairing identity, which the bus reports back to us like any other
+#: parameter. It says nothing about the appliance and it is the one value here
+#: worth keeping out of a state machine, so it is left out.
+_PRIVATE_TOPICS: Final = frozenset({"MobileIdentity"})
+
 #: What identifies a device across the addresses it answers on, best first.
 _IDENTITY_PARAMETERS: Final = ("Identify.UniqueID", "Identify.SerialNr")
 
@@ -99,8 +104,11 @@ def _parameters(raw: dict[str, Any], addresses: list[str]) -> set[str]:
     """Every "Topic.Parameter" reported by any address of one device."""
     found: set[str] = set()
     for key in raw:
-        if (match := _KEY.match(key)) is not None and match.group(1) in addresses:
-            found.add(f"{match.group(2)}.{match.group(3)}")
+        if (match := _KEY.match(key)) is None or match.group(1) not in addresses:
+            continue
+        if match.group(2) in _PRIVATE_TOPICS:
+            continue
+        found.add(f"{match.group(2)}.{match.group(3)}")
     return found
 
 
@@ -153,7 +161,8 @@ class TrumaParameterSensor(CoordinatorEntity[TrumaCoordinator], SensorEntity):
         topic, _, name = parameter.partition(".")
         self._attr_name = f"{topic} {name}"
         self._attr_unique_id = f"{coordinator.key}_{identity}_{parameter}"
-        if parameter in _TEMPERATURES:
+        self._is_temperature = parameter in _TEMPERATURES
+        if self._is_temperature:
             self._attr_device_class = SensorDeviceClass.TEMPERATURE
             self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
             self._attr_suggested_display_precision = 1
@@ -196,6 +205,6 @@ class TrumaParameterSensor(CoordinatorEntity[TrumaCoordinator], SensorEntity):
     def native_value(self) -> str | int | float | None:
         """The parameter's current value."""
         value = self._first(self._parameter)
-        if self._attr_device_class is SensorDeviceClass.TEMPERATURE:
+        if self._is_temperature:
             return value / 10 if isinstance(value, (int, float)) else None
         return _readable(value)
