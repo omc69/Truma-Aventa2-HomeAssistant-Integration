@@ -583,6 +583,16 @@ class TrumaBleDevice:
                 changed[field] = value
         if raw != self.state.raw:
             changed["raw"] = raw
+        if "LastMessage" in body and _LOGGER.isEnabledFor(logging.DEBUG):
+            # The sentinel ends a discovery burst, which is the one moment the
+            # full inventory of what this appliance reports is known.
+            _LOGGER.debug(
+                "%s: 0x%04X reported %d parameter(s): %s",
+                self._name,
+                frame.src,
+                len(raw),
+                ", ".join(sorted(raw)),
+            )
         if _LOGGER.isEnabledFor(logging.DEBUG):
             _LOGGER.debug(
                 "%s: 0x%04X mbp 0x%02X carried %d parameter(s); body keys %s",
