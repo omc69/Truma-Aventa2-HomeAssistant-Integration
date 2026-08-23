@@ -22,6 +22,7 @@ from bleak_retry_connector import BleakClientWithServiceCache, establish_connect
 
 from .const import (
     ACK_DATA,
+    ADDR_BROADCAST,
     ADDR_MESSAGE_BROKER,
     ADDR_INTERFACE,
     ADDR_UNREGISTERED,
@@ -32,6 +33,7 @@ from .const import (
     DATA_WRITE_CHAR_UUID,
     MAX_TOPICS_PER_SUBSCRIBE,
     MBP_INFO,
+    MBP_PARAM_DISCOVERY,
     MBP_PARAM_DISCOVERY_RESPONSE,
     MBP_SUBSCRIBE,
     MBP_WRITE,
@@ -238,8 +240,9 @@ class TrumaBleDevice:
         await client.start_notify(DATA_READ_CHAR_UUID, self._on_data)
 
         await self._async_register()
-        await self._async_subscribe()
         _LOGGER.debug("%s: registered as 0x%04X", self._name, self._address)
+        await self._async_subscribe()
+        await self._async_discover_parameters()
 
         # Stay connected. The appliance pushes updates by itself; the constant
         # acknowledgement traffic keeps the link alive, so no keepalive of our
@@ -287,6 +290,25 @@ class TrumaBleDevice:
             )
             await asyncio.sleep(0.25)
 
+    async def _async_discover_parameters(self, *targets: int) -> None:
+        """Ask devices to report every parameter they have.
+
+        Subscribing only brings changes, and an appliance sitting idle has
+        none — so without this the entities stay empty until someone touches a
+        control. Parameter discovery is what the app uses to fill its screen on
+        connect, and it returns the current value of everything at once.
+        """
+        for target in targets or (ADDR_INTERFACE, ADDR_BROADCAST):
+            _LOGGER.debug("%s: parameter discovery -> 0x%04X", self._name, target)
+            await self._async_send(
+                build_mbp(
+                    dest=target,
+                    src=self._address,
+                    mbp_type=MBP_PARAM_DISCOVERY,
+                )
+            )
+            await asyncio.sleep(0.3)
+
     def _destination_for(self, topic: str) -> int:
         """Which device owns a topic.
 
@@ -309,6 +331,12 @@ class TrumaBleDevice:
             raise BleakError(f"{self._name}: not connected")
 
         async with self._send_lock:
+            _LOGGER.debug(
+                "%s: -> %d bytes to 0x%04X",
+                self._name,
+                len(frame),
+                int.from_bytes(frame[0:2], "little"),
+            )
             self._ready.clear()
             await client.write_gatt_char(
                 CMD_CHAR_UUID,
@@ -400,12 +428,23 @@ class TrumaBleDevice:
             if topic in _APPLIANCE_TOPICS and frame.src not in (0, ADDR_INTERFACE):
                 # The appliance identifies itself by owning these topics; its
                 # address is not fixed and is not the one the reference lists.
-                self._appliance = frame.src
+                if self._appliance != frame.src:
+                    self._appliance = frame.src
+                    self._schedule_discovery(frame.src)
             if (field := _FIELD_MAP.get((topic, parameter))) is not None:
                 changed[field] = value
         if raw != self.state.raw:
             changed["raw"] = raw
         return changed
+
+    def _schedule_discovery(self, target: int) -> None:
+        """Ask a newly identified device for its parameters, off the callback."""
+
+        async def _run() -> None:
+            with contextlib.suppress(BleakError, TimeoutError, OSError):
+                await self._async_discover_parameters(target)
+
+        asyncio.get_running_loop().create_task(_run())  # noqa: RUF006
 
     def _notify(self) -> None:
         for listener in list(self._listeners):
