@@ -101,6 +101,10 @@ ADDR_MESSAGE_BROKER: Final = 0x0000
 #: address identifies itself as "iNet X Interface AC", device type INTERFACE —
 #: the appliance's own BLE interface. Same address, same role, different box.
 ADDR_INTERFACE: Final = 0x0101
+#: The appliance itself. It answers on its own address, which the interface
+#: does not answer for, so a discovery sent only to the interface comes back
+#: without a single air-conditioning parameter.
+ADDR_APPLIANCE: Final = 0x0201
 ADDR_UNREGISTERED: Final = 0xFFFF
 ADDR_BROADCAST: Final = 0xFFFF
 

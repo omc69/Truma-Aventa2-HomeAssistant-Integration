@@ -22,6 +22,7 @@ from bleak_retry_connector import BleakClientWithServiceCache, establish_connect
 
 from .const import (
     ACK_DATA,
+    ADDR_APPLIANCE,
     ADDR_BROADCAST,
     ADDR_INTERFACE,
     ADDR_MESSAGE_BROKER,
@@ -351,7 +352,7 @@ class TrumaBleDevice:
         # Deliberately never ADDR_BROADCAST: asking every device for every
         # parameter at once buries the link in messages that each need their
         # own confirmation. The app addresses devices individually too.
-        for target in targets or (ADDR_INTERFACE,):
+        for target in targets or (ADDR_APPLIANCE, ADDR_INTERFACE):
             _LOGGER.debug("%s: parameter discovery -> 0x%04X", self._name, target)
             await self._async_send(
                 build_mbp(
@@ -431,7 +432,9 @@ class TrumaBleDevice:
         """Consume inbound messages."""
         raw = bytes(data)
         if _LOGGER.isEnabledFor(logging.DEBUG):
-            _LOGGER.debug("%s: <- DATA %s", self._name, raw[:32].hex(" "))
+            _LOGGER.debug(
+                "%s: <- DATA %d bytes %s", self._name, len(raw), raw[:32].hex(" ")
+            )
         if raw:
             # Acknowledge every inbound notification, which is what the app
             # does. Acknowledging only completed messages instead made the
@@ -440,7 +443,16 @@ class TrumaBleDevice:
             # never came. The resulting steady traffic is also what keeps the
             # link alive, so no keepalive of our own is needed.
             self._schedule_command(ACK_DATA)
+        before = self._stream.dropped
         frames = self._stream.feed(raw)
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            _LOGGER.debug(
+                "%s: framer: %d frame(s), %d byte(s) buffered, %d discarded",
+                self._name,
+                len(frames),
+                self._stream.pending,
+                self._stream.dropped - before,
+            )
         changed: dict[str, Any] = {}
         for frame in frames:
             try:
@@ -496,7 +508,9 @@ class TrumaBleDevice:
 
         changed: dict[str, Any] = {}
         raw = dict(self.state.raw)
+        seen = 0
         for topic, parameter, value in _walk_parameters(body):
+            seen += 1
             raw[f"{topic}.{parameter}"] = value
             # The appliance identifies itself by owning these topics; its
             # address is not fixed and is not the one the reference lists.
@@ -511,6 +525,15 @@ class TrumaBleDevice:
                 changed[field] = value
         if raw != self.state.raw:
             changed["raw"] = raw
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            _LOGGER.debug(
+                "%s: 0x%04X mbp 0x%02X carried %d parameter(s); body keys %s",
+                self._name,
+                frame.src,
+                frame.mbp_type or 0,
+                seen,
+                sorted(body),
+            )
         return changed
 
     def _schedule_discovery(self, target: int) -> None:

@@ -136,6 +136,12 @@ class FrameStream:
     def __init__(self) -> None:
         """Start with an empty buffer."""
         self._buf = bytearray()
+        self.dropped = 0
+
+    @property
+    def pending(self) -> int:
+        """Bytes held back waiting for the rest of a frame."""
+        return len(self._buf)
 
     def feed(self, data: bytes) -> list[Frame]:
         """Append received bytes and return every complete frame in them."""
@@ -144,6 +150,10 @@ class FrameStream:
         while len(self._buf) >= V3_HEADER_LEN:
             total = frame_length(self._buf)
             if total is None:
+                # Resynchronising discards a byte at a time. Counting them is
+                # what tells a healthy stream apart from one where whole
+                # messages are being thrown away unnoticed.
+                self.dropped += 1
                 del self._buf[:1]
                 continue
             if len(self._buf) < total:
@@ -156,3 +166,4 @@ class FrameStream:
     def reset(self) -> None:
         """Drop buffered bytes, e.g. after a reconnect."""
         self._buf.clear()
+        self.dropped = 0
