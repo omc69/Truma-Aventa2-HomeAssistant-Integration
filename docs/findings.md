@@ -194,11 +194,55 @@ The natural shape is one `climate` entity plus one `light` entity.
 Note the split: mode and target temperature are panel parameters, everything
 else belongs to the appliance.
 
-## Still open
+## Pairing
 
-- The **pairing** exchange. Both captures were made from an already-paired
-  phone, so the integration cannot yet connect on its own. This is the one
-  remaining blocker.
+### It is ordinary BLE pairing
+
+A capture taken specifically to record pairing contained **no SMP traffic at
+all**. What it shows instead, three times over, is `LE Start Encryption`
+carrying a long-term key the phone already held — the bond had not been
+removed, so iOS simply re-encrypted an existing one.
+
+That is less of a setback than it looks. The absence of any proprietary
+handshake, combined with the reference's note that pairing is done through a
+standard BlueZ agent with a six-digit passkey, says this is plain Bluetooth
+Security Manager pairing. The operating system handles it; the integration
+does not implement it. What the integration does need is a way for the user to
+enter the passkey during setup, and somewhere to keep the resulting bond.
+
+What is still unknown is where the six digits come from — printed on the unit,
+shown on a display, or a fixed value the appliance exposes as `Blemcu.BtPin`.
+
+### Application-level identity
+
+Separate from the BLE bond, the app announces an identity as ordinary topic
+data, and the appliance remembers it:
+
+```
+MobileIdentity.Muid     = <uppercase UUID>   per phone
+MobileIdentity.Uuid     = <lowercase UUID>   shared between this user's phones
+MobileIdentity.UserName = free text, shown in the app's device list
+```
+
+The two are not equivalent. A second phone visible in the same capture carries
+a **different Muid but the same Uuid**, so the Uuid identifies the app or
+account and the Muid the individual device. An integration should generate a
+Muid of its own, keep it, and present a recognisable UserName.
+
+### Connection slots
+
+`BleDeviceManagement.NrFreeSlots` reports capacity by device type:
+
+```
+[{type: 12, nrOfSlots: 1}, {type: 9, nrOfSlots: 2}]
+```
+
+Two app slots were occupied simultaneously during the capture — ours as
+`app1` (`0x0501`) and another phone as `app0` (`0x0500`) — so the appliance
+serves several clients at once. Unlike the Tempra, this is not a
+one-connection-at-a-time device.
+
+## Still open
 - `AmbientLight.LightStep` has never been written, only reported.
 - Whether `AirCirculation.FanLevel` is the right control while ventilating, or
   whether the app uses `AirCooling.Mode` there too. Only one write was seen.
