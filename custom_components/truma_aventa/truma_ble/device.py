@@ -591,7 +591,7 @@ class TrumaBleDevice:
                 self._name,
                 frame.src,
                 len(raw),
-                ", ".join(sorted(raw)),
+                ", ".join(f"{key}={raw[key]!r}" for key in sorted(raw)),
             )
         if _LOGGER.isEnabledFor(logging.DEBUG):
             _LOGGER.debug(

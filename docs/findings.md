@@ -66,6 +66,36 @@ Aventa's own built-in BLE interface. The advertised name `Truma iNetX-<suffix>`
 is Truma's name for that interface, not evidence of a separate box. Same
 address, same role, different hardware.
 
+### How to get this map at runtime — ask the broker
+
+The addresses differ between systems, so they cannot be assumed. The app does
+not guess either: before it asks anything about parameters, it asks the message
+broker who is on the bus. This rides on its own control type (`0x02`), not on
+the broker sub-protocol.
+
+Request — 18 bytes, to `0x0000`:
+
+```
+00 00 01 05 0b 00 02 00 00 00 00 00 00 00 00 00  01 00
+dest  src   size  ^ctrl                          ^request
+```
+
+Answer — from `0x0000`, CBOR body:
+
+```
+{"Devices": [0x0800, 0x0701, 0x0702, 0x0703, 0x032C, 0x0600, 0x0101,
+             0x0200, 0x0400, 0x0801, 0x0904, 0x0500, 0x0601, 0x0501],
+ "LastMessage": 1}
+```
+
+The app then sends `MBP/PARAM_DISCOVERY` to each device in turn, roughly one
+per second. Never to the broadcast address: every device answers at once and
+each answer wants its own acknowledgement, which buries the link.
+
+Asking only `0x0101` returns interface parameters and nothing else — no
+measured temperature, no fan level, no light state. Those live on `0x0801`,
+and the only reliable way to learn that address is this list.
+
 ### Topics per device
 
 | Device | Topics |
@@ -285,6 +315,39 @@ Two app slots were occupied simultaneously during the capture — ours as
 `app1` (`0x0501`) and another phone as `app0` (`0x0500`) — so the appliance
 serves several clients at once. Unlike the Tempra, this is not a
 one-connection-at-a-time device.
+
+## Framing: a notification is a message
+
+Each notification on `fc314003` carries exactly one whole message. The length
+the V3 header declares matches the notification to the byte, every time:
+
+| notification | header size field | `16 + size - 9` |
+|---|---|---|
+| 248 B | `0x00F1` = 241 | 248 |
+| 233 B | `0x00E2` = 226 | 233 |
+| 221 B | `0x00D6` = 214 | 221 |
+| 33 B  | `0x001A` = 26  | 33 |
+
+The command channel announces each message's length beforehand (`83 <len16>`),
+so the boundary is known before the data arrives.
+
+**Never resynchronise byte by byte.** Frames carry no checksum, so a search for
+the next header steps through a CBOR body and finds header-shaped bytes that
+are not headers: two plausible addresses, a known control byte, a length that
+fits. It latches onto one and then consumes every following message as that
+phantom's payload. A single lost byte therefore silences the appliance for the
+rest of the session — and silently, because a message eaten by a phantom frame
+is indistinguishable from a message that never arrived.
+
+This cost us an evening. Twenty-six parameter-discovery answers arrived intact
+and not one became a state value; the log showed the bytes coming in and no
+error anywhere. What made it visible was counting the bytes the framer discards
+and logging how many frames each notification produced.
+
+The rule that works: cut frames only at boundaries that can be real. A buffer
+whose head cannot be a header is dropped whole, and a leftover still waiting
+when a complete message arrives is discarded rather than glued to its front. A
+truncated message then costs itself and nothing after it.
 
 ## Still open
 - `AmbientLight.LightStep` has never been written, only reported.
