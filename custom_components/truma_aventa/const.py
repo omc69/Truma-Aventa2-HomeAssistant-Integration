@@ -11,4 +11,4 @@ DOMAIN: Final = "truma_aventa"
 MANUFACTURER: Final = "Truma"
 DEFAULT_MODEL: Final = "Aventa"
 
-PLATFORMS: Final = [Platform.CLIMATE, Platform.LIGHT]
+PLATFORMS: Final = [Platform.BINARY_SENSOR, Platform.CLIMATE, Platform.LIGHT]

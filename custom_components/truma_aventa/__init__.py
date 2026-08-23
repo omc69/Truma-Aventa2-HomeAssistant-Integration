@@ -9,6 +9,7 @@ from homeassistant.const import CONF_ADDRESS
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
+from .connectivity import async_check_proxy
 from .const import PLATFORMS
 from .coordinator import TrumaConfigEntry, TrumaCoordinator
 from .truma_ble.device import TrumaBleDevice
@@ -25,6 +26,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: TrumaConfigEntry) -> boo
             f"{address} not found. The appliance advertises under a changing "
             "address, so it has to be in range and paired with this host"
         )
+
+    # Checked before connecting, so the reason for a flapping link is visible
+    # from the start rather than after the user has debugged it themselves.
+    async_check_proxy(hass, entry.entry_id, address)
 
     device = TrumaBleDevice(ble_device, name=entry.title)
     coordinator = TrumaCoordinator(hass, entry, device)

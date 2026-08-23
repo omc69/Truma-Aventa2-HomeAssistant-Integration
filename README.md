@@ -30,6 +30,10 @@ Heat/Cool mode.
 
 **Light** — the ambient light, on/off with brightness.
 
+**Binary sensor** — a diagnostic *Connection*, which stays available when
+everything else goes away. A link that keeps flapping is the signature of a
+missing proxy, and that is only visible if something reports the link itself.
+
 Values are **pushed**: once subscribed, the appliance reports changes as they
 happen, including changes made at the panel or from the app.
 
@@ -67,6 +71,14 @@ bluetooth_proxy:
 
 Put the proxy within a few metres of the appliance. Distance shows up as
 connect failures rather than as a clean error.
+
+[`docs/bluetooth-proxy.md`](docs/bluetooth-proxy.md) has a complete
+configuration, notes on choosing a board, and how to confirm the proxy has
+taken over.
+
+While the appliance is only reachable through the host's own adapter, the
+integration raises a repair issue explaining it — so a link that keeps dropping
+is not left looking like a bug.
 
 ## Pairing
 

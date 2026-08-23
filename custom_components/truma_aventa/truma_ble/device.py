@@ -348,11 +348,12 @@ class TrumaBleDevice:
 
     def _on_data(self, _sender: BleakGATTCharacteristic, data: bytearray) -> None:
         """Consume inbound messages."""
-        raw = bytes(data)
-        frames = self._stream.feed(raw)
-        if raw:
-            # Every inbound data frame is acknowledged; the resulting steady
-            # traffic is also what keeps the connection alive.
+        frames = self._stream.feed(bytes(data))
+        if frames:
+            # One acknowledgement per completed message, not per notification:
+            # a long message arrives in several packets and is still one frame.
+            # The resulting steady traffic is also what keeps the link alive,
+            # so no keepalive of our own is needed.
             self._schedule_command(ACK_DATA)
         changed: dict[str, Any] = {}
         for frame in frames:
