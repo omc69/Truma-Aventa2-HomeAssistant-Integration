@@ -22,7 +22,6 @@ from bleak_retry_connector import BleakClientWithServiceCache, establish_connect
 
 from .const import (
     ACK_DATA,
-    ADDR_BROADCAST,
     ADDR_MESSAGE_BROKER,
     ADDR_INTERFACE,
     ADDR_UNREGISTERED,
@@ -111,6 +110,12 @@ class TrumaBleDevice:
         self._ready = asyncio.Event()
         self._registered = asyncio.Event()
         self._send_lock = asyncio.Lock()
+        #: Command-channel writes are queued and issued by a single task.
+        #: Parameter discovery makes the appliance send dozens of messages a
+        #: second, each wanting its own confirmation, and firing a task per
+        #: message put that many concurrent writes on one characteristic.
+        self._commands: asyncio.Queue[bytes] = asyncio.Queue(maxsize=256)
+        self._writer: asyncio.Task[None] | None = None
 
         #: Address the appliance assigns us during registration.
         self._address: int = ADDR_UNREGISTERED
@@ -236,6 +241,10 @@ class TrumaBleDevice:
 
         # Never subscribe to the alternate command characteristic: doing so
         # breaks the transport.
+        while not self._commands.empty():
+            self._commands.get_nowait()
+        self._writer = asyncio.create_task(self._run_writer())
+
         await client.start_notify(CMD_CHAR_UUID, self._on_command)
         await client.start_notify(DATA_READ_CHAR_UUID, self._on_data)
 
@@ -251,6 +260,11 @@ class TrumaBleDevice:
             await asyncio.sleep(1.0)
 
     async def _async_disconnect(self) -> None:
+        if self._writer is not None:
+            self._writer.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._writer
+            self._writer = None
         client, self._client = self._client, None
         self._registered.clear()
         if client is None:
@@ -298,7 +312,10 @@ class TrumaBleDevice:
         control. Parameter discovery is what the app uses to fill its screen on
         connect, and it returns the current value of everything at once.
         """
-        for target in targets or (ADDR_INTERFACE, ADDR_BROADCAST):
+        # Deliberately never ADDR_BROADCAST: asking every device for every
+        # parameter at once buries the link in messages that each need their
+        # own confirmation. The app addresses devices individually too.
+        for target in targets or (ADDR_INTERFACE,):
             _LOGGER.debug("%s: parameter discovery -> 0x%04X", self._name, target)
             await self._async_send(
                 build_mbp(
@@ -377,6 +394,8 @@ class TrumaBleDevice:
     def _on_data(self, _sender: BleakGATTCharacteristic, data: bytearray) -> None:
         """Consume inbound messages."""
         raw = bytes(data)
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            _LOGGER.debug("%s: <- DATA %s", self._name, raw[:32].hex(" "))
         if raw:
             # Acknowledge every inbound notification, which is what the app
             # does. Acknowledging only completed messages instead made the
@@ -394,16 +413,23 @@ class TrumaBleDevice:
             self._notify()
 
     def _schedule_command(self, payload: bytes) -> None:
-        """Write to the command channel from a notification callback."""
-        client = self._client
-        if client is None:
-            return
+        """Queue a command-channel write from a notification callback."""
+        try:
+            self._commands.put_nowait(payload)
+        except asyncio.QueueFull:
+            # Dropping an acknowledgement is better than growing without
+            # bound; the appliance repeats anything it did not hear.
+            _LOGGER.debug("%s: command queue full, dropping an ack", self._name)
 
-        async def _write() -> None:
+    async def _run_writer(self) -> None:
+        """Issue queued command-channel writes one at a time."""
+        while True:
+            payload = await self._commands.get()
+            client = self._client
+            if client is None:
+                continue
             with contextlib.suppress(BleakError, TimeoutError, OSError):
                 await client.write_gatt_char(CMD_CHAR_UUID, payload, response=False)
-
-        asyncio.get_running_loop().create_task(_write())  # noqa: RUF006
 
     def _handle_frame(self, frame: Frame) -> dict[str, Any]:
         """Turn one inbound frame into state changes."""
