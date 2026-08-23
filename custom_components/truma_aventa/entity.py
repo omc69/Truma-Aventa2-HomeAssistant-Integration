@@ -20,7 +20,7 @@ class TrumaEntity(CoordinatorEntity[TrumaCoordinator]):
         device = coordinator.device
         state = coordinator.data
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, device.address)},
+            identifiers={(DOMAIN, coordinator.key)},
             connections={(CONNECTION_BLUETOOTH, device.address)},
             manufacturer=MANUFACTURER,
             model=state.name or DEFAULT_MODEL,

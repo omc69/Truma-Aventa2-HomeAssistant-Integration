@@ -39,7 +39,7 @@ class TrumaConnectionSensor(TrumaEntity, BinarySensorEntity):
     def __init__(self, coordinator: TrumaCoordinator) -> None:
         """Initialise the entity."""
         super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator.device.address}_connection"
+        self._attr_unique_id = f"{coordinator.key}_connection"
 
     @property
     def available(self) -> bool:

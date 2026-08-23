@@ -41,6 +41,13 @@ class TrumaCoordinator(DataUpdateCoordinator[TrumaState]):
         self.device = device
         self.data = device.state
         self._unsubscribers: list[CALLBACK_TYPE] = []
+        #: Base for entity unique ids and the device registry entry. The
+        #: Bluetooth address is the obvious choice and the wrong one: the
+        #: appliance rotates it, and two entries for one appliance then hand
+        #: Home Assistant the same id twice, which makes it silently drop the
+        #: second set of entities — including the ones belonging to the entry
+        #: that actually holds the connection.
+        self.key = entry.unique_id or device.address
 
     @property
     def available(self) -> bool:

@@ -135,6 +135,14 @@ SUBSCRIBED_TOPICS: Final = (
 
 MAX_TOPICS_PER_SUBSCRIBE: Final = 10
 
+#: Pacing for the startup sequence. The appliance is slow to work through a
+#: subscription and will not answer a parameter discovery sent on top of one,
+#: so each stage is given room rather than being fired off back to back.
+SUBSCRIBE_GAP: Final = 0.5
+SUBSCRIBE_SETTLE: Final = 3.0
+IDENTITY_GAP: Final = 0.5
+DISCOVERY_GAP: Final = 3.0
+
 # --- Enumerations, as the appliance itself reports them --------------------
 
 MODE_OFF: Final = 0

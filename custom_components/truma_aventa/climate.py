@@ -79,7 +79,7 @@ class TrumaClimate(TrumaEntity, ClimateEntity):
     def __init__(self, coordinator: TrumaCoordinator) -> None:
         """Initialise the entity."""
         super().__init__(coordinator)
-        self._attr_unique_id = coordinator.device.address
+        self._attr_unique_id = coordinator.key
 
     @property
     def hvac_mode(self) -> HVACMode | None:

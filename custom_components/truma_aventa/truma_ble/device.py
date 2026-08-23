@@ -22,14 +22,17 @@ from bleak_retry_connector import BleakClientWithServiceCache, establish_connect
 
 from .const import (
     ACK_DATA,
-    ADDR_MESSAGE_BROKER,
+    ADDR_BROADCAST,
     ADDR_INTERFACE,
+    ADDR_MESSAGE_BROKER,
     ADDR_UNREGISTERED,
     CMD_CHAR_UUID,
     CONFIRM_MSG_ACK,
     CONTROL_REGISTRATION,
     DATA_READ_CHAR_UUID,
     DATA_WRITE_CHAR_UUID,
+    DISCOVERY_GAP,
+    IDENTITY_GAP,
     MAX_TOPICS_PER_SUBSCRIBE,
     MBP_INFO,
     MBP_PARAM_DISCOVERY,
@@ -40,6 +43,8 @@ from .const import (
     OP_MSG_ACK,
     OP_READY_STATUS,
     PROTOCOL_VERSION,
+    SUBSCRIBE_GAP,
+    SUBSCRIBE_SETTLE,
     SUBSCRIBED_TOPICS,
     TOPIC_AIR_CIRCULATION,
     TOPIC_AIR_COOLING,
@@ -49,6 +54,7 @@ from .const import (
     TOPIC_IDENTIFY,
     TOPIC_ROOM_CLIMATE,
 )
+from ..identity import identity_parameters
 from .frames import Frame, FrameStream, build, build_mbp
 from .models import TrumaState
 
@@ -95,8 +101,15 @@ _APPLIANCE_TOPICS = frozenset(
 class TrumaBleDevice:
     """Maintains a live connection to one Truma appliance."""
 
-    def __init__(self, ble_device: BLEDevice, *, name: str | None = None) -> None:
+    def __init__(
+        self,
+        ble_device: BLEDevice,
+        *,
+        identity: dict[str, str],
+        name: str | None = None,
+    ) -> None:
         """Initialise the manager."""
+        self._identity = identity
         self._ble_device = ble_device
         self._name = name or ble_device.name or ble_device.address
         self._listeners: list[Callable[[TrumaState], None]] = []
@@ -251,6 +264,7 @@ class TrumaBleDevice:
         await self._async_register()
         _LOGGER.debug("%s: registered as 0x%04X", self._name, self._address)
         await self._async_subscribe()
+        await self._async_announce_identity()
         await self._async_discover_parameters()
 
         # Stay connected. The appliance pushes updates by itself; the constant
@@ -302,7 +316,28 @@ class TrumaBleDevice:
                     body={"tn": batch},
                 )
             )
-            await asyncio.sleep(0.25)
+            await asyncio.sleep(SUBSCRIBE_GAP)
+        # The appliance needs a moment to work through a subscription; a
+        # parameter discovery sent on top of one goes unanswered.
+        await asyncio.sleep(SUBSCRIBE_SETTLE)
+
+    async def _async_announce_identity(self) -> None:
+        """Tell the appliance who we are.
+
+        The appliance keeps a list of clients and expects each to announce
+        itself as ordinary topic data. In the captures the app does this before
+        the appliance reports anything at all, so it is not decoration.
+        """
+        for parameter, value in identity_parameters(self._identity):
+            await self._async_send(
+                build_mbp(
+                    dest=ADDR_BROADCAST,
+                    src=self._address,
+                    mbp_type=MBP_INFO,
+                    body={"tn": TOPIC_MOBILE_IDENTITY, "pn": parameter, "v": value},
+                )
+            )
+            await asyncio.sleep(IDENTITY_GAP)
 
     async def _async_discover_parameters(self, *targets: int) -> None:
         """Ask devices to report every parameter they have.
@@ -324,7 +359,7 @@ class TrumaBleDevice:
                     mbp_type=MBP_PARAM_DISCOVERY,
                 )
             )
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(DISCOVERY_GAP)
 
     def _destination_for(self, topic: str) -> int:
         """Which device owns a topic.
@@ -407,9 +442,20 @@ class TrumaBleDevice:
         frames = self._stream.feed(raw)
         changed: dict[str, Any] = {}
         for frame in frames:
-            changed.update(self._handle_frame(frame))
+            try:
+                changed.update(self._handle_frame(frame))
+            except Exception:  # noqa: BLE001
+                # bleak swallows anything raised in a notification callback, so
+                # a decoding fault is indistinguishable from a silent
+                # appliance unless it is logged here.
+                _LOGGER.exception(
+                    "%s: could not handle a frame from 0x%04X",
+                    self._name,
+                    frame.src,
+                )
         if changed:
             self.state = self.state.with_values(changed)
+            _LOGGER.debug("%s: state changed: %s", self._name, sorted(changed))
             self._notify()
 
     def _schedule_command(self, payload: bytes) -> None:

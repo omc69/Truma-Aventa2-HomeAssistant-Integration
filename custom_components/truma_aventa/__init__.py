@@ -11,6 +11,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 
 from .connectivity import async_check_proxy
 from .const import PLATFORMS
+from .identity import CONF_IDENTITY, new_identity
 from .coordinator import TrumaConfigEntry, TrumaCoordinator
 from .truma_ble.device import TrumaBleDevice
 
@@ -44,7 +45,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: TrumaConfigEntry) -> boo
     # from the start rather than after the user has debugged it themselves.
     async_check_proxy(hass, entry.entry_id, address)
 
-    device = TrumaBleDevice(ble_device, name=entry.title)
+    # Generated once and kept: the appliance remembers the clients it knows,
+    # so an identity invented afresh on every start would look like a new
+    # client each time.
+    identity = entry.data.get(CONF_IDENTITY)
+    if not identity:
+        identity = new_identity()
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_IDENTITY: identity}
+        )
+
+    device = TrumaBleDevice(ble_device, identity=identity, name=entry.title)
     coordinator = TrumaCoordinator(hass, entry, device)
     await coordinator.async_start()
     entry.runtime_data = coordinator
