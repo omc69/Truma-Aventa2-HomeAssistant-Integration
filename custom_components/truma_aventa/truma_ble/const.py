@@ -85,6 +85,12 @@ CONTROL_TYPES: Final[dict[int, str]] = {
 
 # --- Message broker sub-protocol -------------------------------------------
 
+#: Device discovery rides on its own control type rather than the broker
+#: sub-protocol: a request asks the broker who is on the bus, and the answer
+#: lists every device address.
+DEVICE_DISCOVERY_REQUEST: Final = 0x01
+DEVICE_DISCOVERY_RESPONSE: Final = 0x02
+
 MBP_INFO: Final = 0x00
 MBP_WRITE: Final = 0x01
 MBP_SUBSCRIBE: Final = 0x02
@@ -146,6 +152,12 @@ SUBSCRIBE_GAP: Final = 0.5
 SUBSCRIBE_SETTLE: Final = 3.0
 IDENTITY_GAP: Final = 0.5
 DISCOVERY_GAP: Final = 3.0
+
+#: Parameter discovery is asked of every device the broker lists, one after
+#: the other, at the pace the app uses. Asking them all at once buries the
+#: link in answers that each need their own acknowledgement.
+DEVICE_DISCOVERY_TIMEOUT: Final = 10.0
+DEVICE_GAP: Final = 1.5
 
 # --- Enumerations, as the appliance itself reports them --------------------
 

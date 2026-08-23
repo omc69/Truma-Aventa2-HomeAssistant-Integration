@@ -29,9 +29,13 @@ from .const import (
     ADDR_UNREGISTERED,
     CMD_CHAR_UUID,
     CONFIRM_MSG_ACK,
+    CONTROL_DISCOVERY,
     CONTROL_REGISTRATION,
     DATA_READ_CHAR_UUID,
     DATA_WRITE_CHAR_UUID,
+    DEVICE_DISCOVERY_REQUEST,
+    DEVICE_DISCOVERY_TIMEOUT,
+    DEVICE_GAP,
     DISCOVERY_GAP,
     IDENTITY_GAP,
     MAX_TOPICS_PER_SUBSCRIBE,
@@ -124,6 +128,8 @@ class TrumaBleDevice:
 
         self._ready = asyncio.Event()
         self._registered = asyncio.Event()
+        self._devices: tuple[int, ...] = ()
+        self._devices_listed = asyncio.Event()
         self._send_lock = asyncio.Lock()
         #: Command-channel writes are queued and issued by a single task.
         #: Parameter discovery makes the appliance send dozens of messages a
@@ -238,6 +244,8 @@ class TrumaBleDevice:
     async def _async_connect_and_hold(self) -> None:
         self._stream.reset()
         self._registered.clear()
+        self._devices = ()
+        self._devices_listed.clear()
         self._address = ADDR_UNREGISTERED
         self._appliance = None
 
@@ -267,7 +275,7 @@ class TrumaBleDevice:
         _LOGGER.debug("%s: registered as 0x%04X", self._name, self._address)
         await self._async_subscribe()
         await self._async_announce_identity()
-        await self._async_discover_parameters()
+        await self._async_discover_parameters(*await self._async_list_devices())
 
         # Stay connected. The appliance pushes updates by itself; the constant
         # acknowledgement traffic keeps the link alive, so no keepalive of our
@@ -341,6 +349,45 @@ class TrumaBleDevice:
             )
             await asyncio.sleep(IDENTITY_GAP)
 
+    async def _async_list_devices(self) -> tuple[int, ...]:
+        """Ask the broker which devices are on the bus.
+
+        Which address the air conditioning answers on differs between systems
+        -- the protocol reference names 0x0201, this one uses 0x0801 -- so
+        guessing costs the appliance's own parameters, which is everything a
+        climate entity needs. The app asks and then queries each device it is
+        told about, and so do we. Our own address is left out: we would only
+        be asking ourselves.
+        """
+        await self._async_send(
+            build(
+                dest=ADDR_MESSAGE_BROKER,
+                src=self._address,
+                control=CONTROL_DISCOVERY,
+                payload=bytes([DEVICE_DISCOVERY_REQUEST, 0x00]),
+            )
+        )
+        try:
+            await asyncio.wait_for(
+                self._devices_listed.wait(), timeout=DEVICE_DISCOVERY_TIMEOUT
+            )
+        except TimeoutError:
+            _LOGGER.debug(
+                "%s: no device list; asking the interface alone", self._name
+            )
+            return (ADDR_INTERFACE,)
+        devices = tuple(
+            address
+            for address in self._devices
+            if address not in (self._address, ADDR_MESSAGE_BROKER)
+        )
+        _LOGGER.debug(
+            "%s: bus holds %s",
+            self._name,
+            ", ".join(f"0x{address:04X}" for address in devices),
+        )
+        return devices or (ADDR_INTERFACE,)
+
     async def _async_discover_parameters(self, *targets: int) -> None:
         """Ask devices to report every parameter they have.
 
@@ -352,7 +399,9 @@ class TrumaBleDevice:
         # Deliberately never ADDR_BROADCAST: asking every device for every
         # parameter at once buries the link in messages that each need their
         # own confirmation. The app addresses devices individually too.
-        for target in targets or (ADDR_APPLIANCE, ADDR_INTERFACE):
+        chosen = targets or (ADDR_APPLIANCE, ADDR_INTERFACE)
+        gap = DEVICE_GAP if len(chosen) > 2 else DISCOVERY_GAP
+        for target in chosen:
             _LOGGER.debug("%s: parameter discovery -> 0x%04X", self._name, target)
             await self._async_send(
                 build_mbp(
@@ -361,7 +410,7 @@ class TrumaBleDevice:
                     mbp_type=MBP_PARAM_DISCOVERY,
                 )
             )
-            await asyncio.sleep(DISCOVERY_GAP)
+            await asyncio.sleep(gap)
 
     def _destination_for(self, topic: str) -> int:
         """Which device owns a topic.
@@ -497,6 +546,15 @@ class TrumaBleDevice:
             if isinstance(body, dict) and "addr" in body:
                 self._address = int(body["addr"])
                 self._registered.set()
+            return {}
+
+        if frame.control == CONTROL_DISCOVERY:
+            body = frame.body
+            if isinstance(body, dict) and "Devices" in body:
+                self._devices = tuple(
+                    int(address) for address in body["Devices"] or ()
+                )
+                self._devices_listed.set()
             return {}
 
         if frame.mbp_type not in (MBP_INFO, MBP_PARAM_DISCOVERY_RESPONSE):

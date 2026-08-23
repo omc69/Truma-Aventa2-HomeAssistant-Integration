@@ -10,6 +10,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import cbor2
 import pytest
 
 sys.path.insert(
@@ -21,8 +22,10 @@ from truma_ble.const import (
     ADDR_INTERFACE,
     ADDR_MESSAGE_BROKER,
     ADDR_UNREGISTERED,
+    CONTROL_DISCOVERY,
     CONTROL_MBP,
     CONTROL_REGISTRATION,
+    DEVICE_DISCOVERY_REQUEST,
     MBP_SUBSCRIBE,
     MBP_WRITE,
 )
@@ -197,3 +200,42 @@ def test_unknown_control_type_is_not_a_header() -> None:
     candidate = bytearray(WRITE_LIGHT_ON[:16])
     candidate[6] = 0x77
     assert frame_length(bytes(candidate)) is None
+
+
+# --- device discovery ------------------------------------------------------
+
+#: The app asking the broker who is on the bus, byte for byte.
+DEVICE_DISCOVERY = bytes.fromhex(
+    "0000010 50b0002000000000000000000 0100".replace(" ", "")
+)
+
+
+def test_device_discovery_request_reproduces_the_capture() -> None:
+    """Asking the broker for the device list is a control type of its own."""
+    built = build(
+        dest=ADDR_MESSAGE_BROKER,
+        src=0x0501,
+        control=CONTROL_DISCOVERY,
+        payload=bytes([DEVICE_DISCOVERY_REQUEST, 0x00]),
+    )
+    assert built == DEVICE_DISCOVERY
+
+
+def test_device_list_is_read_from_the_answer() -> None:
+    """The answer names every device, including the one owning the cooling.
+
+    Which address the air conditioning answers on is not fixed: the protocol
+    reference documents 0x0201 and the captured appliance uses 0x0801, so the
+    list is the only way to reach it.
+    """
+    answer = build(
+        dest=0x0501,
+        src=ADDR_MESSAGE_BROKER,
+        control=CONTROL_DISCOVERY,
+        payload=bytes([0x02, 0x00])
+        + cbor2.dumps({"Devices": [0x0101, 0x0801, 0x0501], "LastMessage": 1}),
+    )
+    frames = FrameStream().feed(answer)
+    assert len(frames) == 1
+    assert frames[0].control == CONTROL_DISCOVERY
+    assert frames[0].body["Devices"] == [0x0101, 0x0801, 0x0501]
