@@ -11,8 +11,8 @@ from homeassistant.exceptions import ConfigEntryNotReady
 
 from .connectivity import async_check_proxy
 from .const import PLATFORMS
-from .identity import CONF_IDENTITY, new_identity
 from .coordinator import TrumaConfigEntry, TrumaCoordinator
+from .identity import CONF_IDENTITY, new_identity
 from .truma_ble.device import TrumaBleDevice
 
 _LOGGER = logging.getLogger(__name__)

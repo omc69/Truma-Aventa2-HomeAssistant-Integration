@@ -17,16 +17,16 @@ sys.path.insert(
     str(Path(__file__).resolve().parents[1] / "custom_components" / "truma_aventa"),
 )
 
-from truma_ble.const import (  # noqa: E402
-    ADDR_MESSAGE_BROKER,
+from truma_ble.const import (
     ADDR_INTERFACE,
+    ADDR_MESSAGE_BROKER,
     ADDR_UNREGISTERED,
     CONTROL_MBP,
     CONTROL_REGISTRATION,
     MBP_SUBSCRIBE,
     MBP_WRITE,
 )
-from truma_ble.frames import (  # noqa: E402
+from truma_ble.frames import (
     FrameStream,
     build,
     build_mbp,

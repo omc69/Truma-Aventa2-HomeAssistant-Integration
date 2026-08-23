@@ -56,7 +56,7 @@ class Frame:
             return None
         try:
             return cbor2.loads(self.payload[2:])
-        except Exception:  # noqa: BLE001 - a truncated frame is not an error
+        except Exception:
             return None
 
 

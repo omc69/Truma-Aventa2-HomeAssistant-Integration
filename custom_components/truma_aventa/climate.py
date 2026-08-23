@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 from homeassistant.components.climate import (
     ClimateEntity,
@@ -64,8 +64,8 @@ class TrumaClimate(TrumaEntity, ClimateEntity):
 
     _attr_name = None
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
-    _attr_hvac_modes = list(_HVAC_TO_MODE)
-    _attr_fan_modes = list(_FAN_MODE_TO_VALUE)
+    _attr_hvac_modes: ClassVar[list[HVACMode]] = list(_HVAC_TO_MODE)
+    _attr_fan_modes: ClassVar[list[str]] = list(_FAN_MODE_TO_VALUE)
     _attr_min_temp = MIN_TEMPERATURE
     _attr_max_temp = MAX_TEMPERATURE
     _attr_target_temperature_step = 1.0
@@ -144,7 +144,7 @@ class TrumaClimate(TrumaEntity, ClimateEntity):
     async def _async_write(self, topic: str, parameter: str, value: Any) -> None:
         try:
             await self.coordinator.device.async_set_parameter(topic, parameter, value)
-        except Exception as err:  # noqa: BLE001 - surfaced to the user as-is
+        except Exception as err:
             raise HomeAssistantError(
                 f"Could not send {topic}.{parameter} to the appliance: {err}"
             ) from err

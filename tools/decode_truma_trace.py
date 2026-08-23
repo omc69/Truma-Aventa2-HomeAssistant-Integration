@@ -225,7 +225,7 @@ def decode_message(frame: bytes) -> dict | None:
         result["correlation"] = result["payload"][1]
         try:
             result["cbor"] = cbor2.loads(result["payload"][2:])
-        except Exception:  # noqa: BLE001 - a truncated frame is not an error
+        except Exception:
             result["cbor"] = None
     return result
 

@@ -52,10 +52,11 @@ from .const import (
     TOPIC_AIR_HEATING,
     TOPIC_AMBIENT_LIGHT,
     TOPIC_IDENTIFY,
+    TOPIC_MOBILE_IDENTITY,
     TOPIC_ROOM_CLIMATE,
 )
-from ..identity import identity_parameters
 from .frames import Frame, FrameStream, build, build_mbp
+from .identity import identity_parameters
 from .models import TrumaState
 
 _LOGGER = logging.getLogger(__name__)
@@ -219,7 +220,7 @@ class TrumaBleDevice:
                 raise
             except (BleakError, TimeoutError, OSError) as err:
                 _LOGGER.debug("%s: connection lost: %s", self._name, err)
-            except Exception:  # noqa: BLE001 - the loop must never die
+            except Exception:
                 _LOGGER.exception("%s: unexpected error", self._name)
             else:
                 backoff = _BACKOFF_START
@@ -444,7 +445,7 @@ class TrumaBleDevice:
         for frame in frames:
             try:
                 changed.update(self._handle_frame(frame))
-            except Exception:  # noqa: BLE001
+            except Exception:
                 # bleak swallows anything raised in a notification callback, so
                 # a decoding fault is indistinguishable from a silent
                 # appliance unless it is logged here.
@@ -497,12 +498,15 @@ class TrumaBleDevice:
         raw = dict(self.state.raw)
         for topic, parameter, value in _walk_parameters(body):
             raw[f"{topic}.{parameter}"] = value
-            if topic in _APPLIANCE_TOPICS and frame.src not in (0, ADDR_INTERFACE):
-                # The appliance identifies itself by owning these topics; its
-                # address is not fixed and is not the one the reference lists.
-                if self._appliance != frame.src:
-                    self._appliance = frame.src
-                    self._schedule_discovery(frame.src)
+            # The appliance identifies itself by owning these topics; its
+            # address is not fixed and is not the one the reference lists.
+            if (
+                topic in _APPLIANCE_TOPICS
+                and frame.src not in (0, ADDR_INTERFACE)
+                and self._appliance != frame.src
+            ):
+                self._appliance = frame.src
+                self._schedule_discovery(frame.src)
             if (field := _FIELD_MAP.get((topic, parameter))) is not None:
                 changed[field] = value
         if raw != self.state.raw:
@@ -516,7 +520,7 @@ class TrumaBleDevice:
             with contextlib.suppress(BleakError, TimeoutError, OSError):
                 await self._async_discover_parameters(target)
 
-        asyncio.get_running_loop().create_task(_run())  # noqa: RUF006
+        asyncio.get_running_loop().create_task(_run())
 
     def _notify(self) -> None:
         for listener in list(self._listeners):

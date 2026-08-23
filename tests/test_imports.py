@@ -21,7 +21,7 @@ INTEGRATION = (
 )
 sys.path.insert(0, str(INTEGRATION))
 
-import truma_ble  # noqa: E402
+import truma_ble
 
 
 def _imported_names(path: Path) -> set[str]:

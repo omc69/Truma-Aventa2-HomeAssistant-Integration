@@ -10,8 +10,8 @@ from __future__ import annotations
 from .const import (
     ADVERTISED_NAME_PREFIX,
     ADVERTISED_SERVICE_UUIDS,
-    KNOWN_INTERFACE_UUIDS,
     FAN_MODES,
+    KNOWN_INTERFACE_UUIDS,
     MAX_LIGHT_STEP,
     MAX_TEMPERATURE,
     MIN_TEMPERATURE,
@@ -36,8 +36,8 @@ from .models import TrumaState, degrees_to_tenths, tenths_to_degrees
 __all__ = [
     "ADVERTISED_NAME_PREFIX",
     "ADVERTISED_SERVICE_UUIDS",
-    "KNOWN_INTERFACE_UUIDS",
     "FAN_MODES",
+    "KNOWN_INTERFACE_UUIDS",
     "MAX_LIGHT_STEP",
     "MAX_TEMPERATURE",
     "MIN_TEMPERATURE",

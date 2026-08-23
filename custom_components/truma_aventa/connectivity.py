@@ -41,7 +41,7 @@ def async_has_proxy_path(hass: HomeAssistant, address: str) -> bool | None:
         devices = bluetooth.async_scanner_devices_by_address(
             hass, address, connectable=True
         )
-    except Exception:  # noqa: BLE001 - never let a diagnostic break setup
+    except Exception:
         return None
 
     if not devices:

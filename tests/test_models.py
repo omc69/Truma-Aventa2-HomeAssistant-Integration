@@ -10,12 +10,12 @@ sys.path.insert(
     str(Path(__file__).resolve().parents[1] / "custom_components" / "truma_aventa"),
 )
 
-from truma_ble.const import (  # noqa: E402
+from truma_ble.const import (
     MODE_COOLING,
     MODE_HEATING_AC,
     MODE_VENTILATING,
 )
-from truma_ble.models import (  # noqa: E402
+from truma_ble.models import (
     TrumaState,
     degrees_to_tenths,
     tenths_to_degrees,

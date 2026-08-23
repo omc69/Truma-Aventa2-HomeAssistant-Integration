@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
@@ -35,7 +35,7 @@ class TrumaLight(TrumaEntity, LightEntity):
 
     _attr_translation_key = "ambient_light"
     _attr_color_mode = ColorMode.BRIGHTNESS
-    _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
+    _attr_supported_color_modes: ClassVar[set[ColorMode]] = {ColorMode.BRIGHTNESS}
 
     def __init__(self, coordinator: TrumaCoordinator) -> None:
         """Initialise the entity."""
@@ -72,7 +72,7 @@ class TrumaLight(TrumaEntity, LightEntity):
             await self.coordinator.device.async_set_parameter(
                 TOPIC_AMBIENT_LIGHT, parameter, value
             )
-        except Exception as err:  # noqa: BLE001 - surfaced to the user as-is
+        except Exception as err:
             raise HomeAssistantError(
                 f"Could not send AmbientLight.{parameter} to the appliance: {err}"
             ) from err
