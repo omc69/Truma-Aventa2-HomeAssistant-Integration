@@ -17,6 +17,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from homeassistant.components.sensor import SensorStateClass
+
 from custom_components.truma_aventa.const import DOMAIN
 from custom_components.truma_aventa.sensor import (
     TrumaParameterSensor,
@@ -34,6 +36,8 @@ RAW: dict[str, Any] = {
     "0101/Identify.SwMaj": 3,
     "0101/Identify.SwMin": 5,
     "0101/Temperature.Internal": 249,
+    "0101/Eol.Vcc12": 12040,
+    "0101/Identify.SwBgFx": 26,
     "0200/Identify.UniqueID": "0a69818a.device.id.ii.inetx",
     "0200/RoomClimate.TgtTemp": 220,
     # The air conditioning answers on two addresses and carries its name on
@@ -201,3 +205,26 @@ def test_a_name_on_a_later_address_still_counts(coordinator: _Coordinator) -> No
     sensor = _sensor(coordinator, "AirCooling.Temp")
     assert sensor.device_info["name"] == "Aventa comfort 2. G"
     assert sensor.name == "AirCooling Temp"
+
+
+# --- long-term statistics --------------------------------------------------
+
+
+def test_a_temperature_produces_statistics(coordinator: _Coordinator) -> None:
+    """Without a state class there is history for ten days and nothing after."""
+    sensor = _sensor(coordinator, "Temperature.Internal")
+    assert sensor.state_class is SensorStateClass.MEASUREMENT
+
+
+def test_a_supply_rail_produces_statistics(coordinator: _Coordinator) -> None:
+    """The rails are millivolts and worth a trend."""
+    sensor = _sensor(coordinator, "Eol.Vcc12")
+    assert sensor.state_class is SensorStateClass.MEASUREMENT
+    assert sensor.native_value == 12040
+
+
+def test_a_number_that_is_not_a_measurement_gets_no_state_class(
+    coordinator: _Coordinator,
+) -> None:
+    """A firmware revision is numeric and averaging it means nothing."""
+    assert _sensor(coordinator, "Identify.SwBgFx").state_class is None

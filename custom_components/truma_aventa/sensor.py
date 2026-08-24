@@ -20,8 +20,16 @@ from __future__ import annotations
 import re
 from typing import Any, Final
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
-from homeassistant.const import EntityCategory, UnitOfTemperature
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
+from homeassistant.const import (
+    EntityCategory,
+    UnitOfElectricPotential,
+    UnitOfTemperature,
+)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -46,6 +54,9 @@ _TEMPERATURES: Final = frozenset(
         "Temperature.Internal",
     }
 )
+
+#: Supply rails, reported in millivolts.
+_VOLTAGES: Final = frozenset({"Eol.Vcc12", "Eol.Vcc5"})
 
 #: Our own pairing identity, which the bus reports back to us like any other
 #: parameter. It says nothing about the appliance and it is the one value here
@@ -172,6 +183,16 @@ class TrumaParameterSensor(CoordinatorEntity[TrumaCoordinator], SensorEntity):
             self._attr_device_class = SensorDeviceClass.TEMPERATURE
             self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
             self._attr_suggested_display_precision = 1
+            # Without a state class there are no long-term statistics, and a
+            # temperature is gone with the recorder's retention rather than
+            # becoming a year's trend.
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+        elif parameter in _VOLTAGES:
+            self._attr_device_class = SensorDeviceClass.VOLTAGE
+            self._attr_native_unit_of_measurement = (
+                UnitOfElectricPotential.MILLIVOLT
+            )
+            self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_device_info = self._build_device_info(coordinator, identity)
 
     def _build_device_info(

@@ -56,6 +56,11 @@ and a generic writable entity over that surface would be a foot-gun.
 Values are **pushed**: once subscribed, the appliance reports changes as they
 happen, including changes made at the panel or from the app.
 
+Temperatures and the supply rails carry a state class, so they build long-term
+statistics rather than disappearing with the recorder's retention. The rest are
+states, not measurements — averaging a firmware revision or a mode number says
+nothing — so they appear in history only.
+
 ## Installation
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=omc69&repository=Truma-Aventa2-HomeAssistant-Integration&category=integration)
