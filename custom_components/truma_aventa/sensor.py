@@ -159,11 +159,12 @@ class TrumaParameterSensor(CoordinatorEntity[TrumaCoordinator], SensorEntity):
         self._addresses = list(addresses)
         self._parameter = parameter
         topic, _, name = parameter.partition(".")
-        # An unnamed address keeps its number in the entity name: its
+        # An unnamed device keeps the address in the entity name: its
         # parameters sit on the appliance's own device alongside those of the
         # other unnamed addresses, which all report the same handful of names.
-        named = bool(coordinator.data.raw.get(f"{self._addresses[0]}/Identify.Name"))
-        prefix = "" if named else f"0x{self._addresses[0]} "
+        # Asked of the device, not of one address -- a device answering on
+        # several addresses carries its name on only one of them.
+        prefix = "" if self._first("Identify.Name") else f"0x{self._addresses[0]} "
         self._attr_name = f"{prefix}{topic} {name}"
         self._attr_unique_id = f"{coordinator.key}_{identity}_{parameter}"
         self._is_temperature = parameter in _TEMPERATURES

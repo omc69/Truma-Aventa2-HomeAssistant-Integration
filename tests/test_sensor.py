@@ -36,7 +36,10 @@ RAW: dict[str, Any] = {
     "0101/Temperature.Internal": 249,
     "0200/Identify.UniqueID": "0a69818a.device.id.ii.inetx",
     "0200/RoomClimate.TgtTemp": 220,
-    "0801/Identify.UniqueID": "aventa.device.id",
+    # The air conditioning answers on two addresses and carries its name on
+    # the second of them, which is the one that must decide.
+    "0702/Identify.SerialNr": "AVRLWZZ-A-37184097",
+    "0801/Identify.SerialNr": "AVRLWZZ-A-37184097",
     "0801/Identify.Name": "Aventa comfort 2. G",
     "0801/AirCooling.Temp": 251,
     "0801/System.Plugged": 1,
@@ -47,7 +50,7 @@ RAW: dict[str, Any] = {
     "0601/DeviceManagement.RegCompleted": 1,
 }
 
-COMPLETE = frozenset({"0101", "0200", "0801", "0601"})
+COMPLETE = frozenset({"0101", "0200", "0702", "0801", "0601"})
 
 
 class _Coordinator:
@@ -187,3 +190,14 @@ def test_a_bookkeeping_endpoint_does_not(coordinator: _Coordinator) -> None:
     sensor = _sensor(coordinator, "DeviceManagement.RegCompleted")
     assert sensor.device_info["identifiers"] == {(DOMAIN, coordinator.key)}
     assert sensor.name.startswith("0x0601 ")
+
+
+def test_a_name_on_a_later_address_still_counts(coordinator: _Coordinator) -> None:
+    """A device answering on several addresses names itself on only one.
+
+    Deciding from the first address alone put the address into the name of
+    every air-conditioning sensor, on a device that was correctly named.
+    """
+    sensor = _sensor(coordinator, "AirCooling.Temp")
+    assert sensor.device_info["name"] == "Aventa comfort 2. G"
+    assert sensor.name == "AirCooling Temp"

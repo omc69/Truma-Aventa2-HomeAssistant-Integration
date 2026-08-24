@@ -34,6 +34,22 @@ jobs:
       - run: pip install -r requirements_test.txt
       - run: python -m pytest tests/ -q
 
+  version:
+    name: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Three releases shipped a manifest still naming an older version: the
+      # bump was a sed that matched nothing and said so to no one. On a tag,
+      # the two have to agree.
+      - name: manifest version matches the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          manifest=$(python3 -c "import json;print(json.load(open('custom_components/truma_aventa/manifest.json'))['version'])")
+          echo "tag=$tag manifest=$manifest"
+          test "$tag" = "$manifest"
+
   lint:
     name: ruff
     runs-on: ubuntu-latest
