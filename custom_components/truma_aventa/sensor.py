@@ -159,7 +159,12 @@ class TrumaParameterSensor(CoordinatorEntity[TrumaCoordinator], SensorEntity):
         self._addresses = list(addresses)
         self._parameter = parameter
         topic, _, name = parameter.partition(".")
-        self._attr_name = f"{topic} {name}"
+        # An unnamed address keeps its number in the entity name: its
+        # parameters sit on the appliance's own device alongside those of the
+        # other unnamed addresses, which all report the same handful of names.
+        named = bool(coordinator.data.raw.get(f"{self._addresses[0]}/Identify.Name"))
+        prefix = "" if named else f"0x{self._addresses[0]} "
+        self._attr_name = f"{prefix}{topic} {name}"
         self._attr_unique_id = f"{coordinator.key}_{identity}_{parameter}"
         self._is_temperature = parameter in _TEMPERATURES
         if self._is_temperature:
@@ -171,16 +176,25 @@ class TrumaParameterSensor(CoordinatorEntity[TrumaCoordinator], SensorEntity):
     def _build_device_info(
         self, coordinator: TrumaCoordinator, identity: str
     ) -> DeviceInfo:
-        """Describe the bus device this parameter belongs to."""
+        """Describe the bus device this parameter belongs to.
+
+        Only an address that names itself becomes a device of its own. The bus
+        answers on more addresses than the system has hardware -- registration
+        slots, the BLE chip, the Bluetooth record -- and each of those reports
+        nothing but its own bookkeeping. Given a device each, they bury the two
+        that matter in a list of nine.
+        """
         name = self._first("Identify.Name")
+        if not name:
+            return DeviceInfo(identifiers={(DOMAIN, coordinator.key)})
         major = self._first("Identify.SwMaj")
         minor = self._first("Identify.SwMin")
         serial = self._first("Identify.SerialNr")
         return DeviceInfo(
             identifiers={(DOMAIN, f"{coordinator.key}:{identity}")},
             manufacturer=MANUFACTURER,
-            model=str(name) if name else None,
-            name=str(name) if name else f"Truma 0x{self._addresses[0]}",
+            model=str(name),
+            name=str(name),
             serial_number=str(serial) if serial else None,
             sw_version=(
                 f"{major}.{minor}" if major is not None and minor is not None else None

@@ -42,10 +42,12 @@ temperatures, mains presence, error codes, firmware revisions, timer
 configuration. Every one becomes a diagnostic sensor, grouped under the device
 that reported it. On this system that is 126 sensors across eight devices.
 
-A Truma system answers on more addresses than it has devices — the interface
-here answers on three, all reporting the same parameters under one
-`Identify.UniqueID`. Addresses that share an identity are folded into one Home
-Assistant device, so the list stays readable.
+A Truma system answers on more addresses than it has hardware. Some are the
+same device seen twice — those are folded together by `Identify.UniqueID`.
+Others are bookkeeping endpoints: registration slots, the BLE chip, the
+Bluetooth record, each reporting nothing but its own state. Only an address
+that names itself becomes a device; the rest hang their parameters on the
+appliance, with the address in the entity name. Two devices instead of nine.
 
 Writing stays with the climate and light entities. Parameter discovery exposes
 `System.FactoryReset` and `DeviceManagement.Delete` alongside everything else,

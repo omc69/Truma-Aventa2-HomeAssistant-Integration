@@ -17,6 +17,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from custom_components.truma_aventa.const import DOMAIN
 from custom_components.truma_aventa.sensor import (
     TrumaParameterSensor,
     _group_addresses,
@@ -41,9 +42,12 @@ RAW: dict[str, Any] = {
     "0801/System.Plugged": 1,
     "0801/TimerConfig.Timer1": {"id": 0, "name": "DefaultTimer"},
     "0801/MobileIdentity.Muid": "7D6EBC83-D706-477E-A5B9-EC145D8C7518",
+    # A bookkeeping endpoint: answers on the bus, names nothing, and reports
+    # only its own registration state.
+    "0601/DeviceManagement.RegCompleted": 1,
 }
 
-COMPLETE = frozenset({"0101", "0200", "0801"})
+COMPLETE = frozenset({"0101", "0200", "0801", "0601"})
 
 
 class _Coordinator:
@@ -135,8 +139,9 @@ def test_a_long_value_is_cut_to_what_a_state_holds() -> None:
 def test_addresses_of_one_device_are_folded(coordinator: _Coordinator) -> None:
     """The interface answers on several addresses under one identity."""
     groups = _group_addresses(coordinator.data.raw, coordinator.data.complete)
-    assert len(groups) == 2
     assert groups["0a69818a.device.id.ii.inetx"] == ["0101", "0200"]
+    # The interface, the air conditioning, and one bookkeeping endpoint.
+    assert len(groups) == 3
 
 
 def test_a_folded_device_merges_what_its_addresses_report(
@@ -159,3 +164,26 @@ def test_our_own_identity_is_not_published(coordinator: _Coordinator) -> None:
     """MobileIdentity is what we told the appliance about ourselves."""
     found = _parameters(coordinator.data.raw, ["0801"])
     assert not any(parameter.startswith("MobileIdentity") for parameter in found)
+
+
+# --- which bus addresses deserve a device ----------------------------------
+
+
+def test_an_address_that_names_itself_gets_its_own_device(
+    coordinator: _Coordinator,
+) -> None:
+    """The air conditioning is a device in its own right."""
+    info = _sensor(coordinator, "AirCooling.Temp").device_info
+    assert info["name"] == "Aventa comfort 2. G"
+
+
+def test_a_bookkeeping_endpoint_does_not(coordinator: _Coordinator) -> None:
+    """The bus answers on more addresses than the system has hardware.
+
+    Registration slots, the BLE chip and the Bluetooth record each report a
+    handful of their own parameters. A device apiece buries the two that
+    matter in a list of nine, so their parameters go to the appliance.
+    """
+    sensor = _sensor(coordinator, "DeviceManagement.RegCompleted")
+    assert sensor.device_info["identifiers"] == {(DOMAIN, coordinator.key)}
+    assert sensor.name.startswith("0x0601 ")

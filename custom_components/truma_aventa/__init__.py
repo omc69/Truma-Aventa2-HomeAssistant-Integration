@@ -8,6 +8,7 @@ from homeassistant.components import bluetooth
 from homeassistant.const import CONF_ADDRESS
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import device_registry as dr
 
 from .connectivity import async_check_proxy
 from .const import PLATFORMS
@@ -80,3 +81,18 @@ async def async_unload_entry(hass: HomeAssistant, entry: TrumaConfigEntry) -> bo
     if unloaded:
         await entry.runtime_data.async_stop()
     return unloaded
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant,
+    entry: TrumaConfigEntry,
+    device: dr.DeviceEntry,
+) -> bool:
+    """Allow a device that is no longer reported to be deleted.
+
+    Which devices the bus lists can change -- and an earlier version of this
+    integration made one out of every address that answered, including the
+    bookkeeping endpoints. Those entries have to be removable by hand rather
+    than sitting in the list forever.
+    """
+    return True
